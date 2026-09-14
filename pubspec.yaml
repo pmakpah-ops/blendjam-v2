@@ -7,12 +7,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.6
+  cupertino_icons: ^1.0.8
   just_audio: ^0.10.6
-  just_audio_background: ^0.0.1-beta.17
-  audio_waveforms: ^1.0.6
+  just_audio_background: ^0.0.1-beta.20  # <-- UPDATED
+  audio_waveforms: ^1.2.0  # <-- UPDATED 
   file_picker: ^10.2.0
-  ffmpeg_kit_flutter: ^6.0.3
+  ffmpeg_kit_flutter: ^6.0.6  # <-- UPDATED
 dev_dependencies:
   flutter_test:
     sdk: flutter
