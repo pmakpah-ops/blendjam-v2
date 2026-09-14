@@ -2,26 +2,31 @@ name: blendjam
 description: BlendJam DJ Mixer
 publish_to: 'none'
 version: 1.0.0+1
+
 environment:
   sdk: '>=3.3.0 <4.0.0'
+
 dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
   just_audio: ^0.10.6
-  just_audio_background: ^0.0.1-beta.20  # <-- UPDATED
-  audio_waveforms: ^1.2.0  # <-- UPDATED 
+  just_audio_background: ^0.0.1-beta.20  # Fixed V2 embedding
+  audio_waveforms: ^1.2.0  # Fixed V2 embedding
   file_picker: ^10.2.0
-  ffmpeg_kit_flutter: ^6.0.6  # <-- UPDATED
+  ffmpeg_kit_flutter: ^6.0.3  # Fixed - 6.0.6 doesn't exist
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_launcher_icons: ^0.14.3
+
 flutter:
   uses-material-design: true
   assets:
     - assets/
     - assets/icon.png
+
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: false
