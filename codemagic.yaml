@@ -1,0 +1,13 @@
+workflows:
+  android-release:
+    name: Android Release
+    scripts:
+      - name: Check deps
+        script: |
+          flutter pub deps
+          flutter pub outdated
+      - name: Build APK
+        script: |
+          flutter build apk --release -v
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
