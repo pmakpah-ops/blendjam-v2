@@ -5,16 +5,19 @@ workflows:
     instance_type: mac_mini_m2
     environment:
       flutter: 3.24.5
+    cache:
+      cache_paths: []
     scripts:
       - name: Fix broken Gradle project
         script: |
           rm -rf android
-          flutter create --org com.pmakpah.blendjam --project-name blendjam --platforms=android .
+          flutter create --org com.blendjam --project-name blendjam --platforms=android . --overwrite
+          echo "=== NEW android files ==="
+          ls -l android/
+          cat android/settings.gradle
       - name: Get dependencies
-        script: |
-          flutter pub get
+        script: flutter pub get
       - name: Build APK
-        script: |
-          flutter build apk --release -v
+        script: flutter build apk --release -v
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
