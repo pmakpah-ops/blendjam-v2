@@ -1,11 +1,18 @@
 workflows:
   android-release:
     name: Android Release
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: 3.24.5
     scripts:
-      - name: Check deps
+      - name: Fix broken Gradle project
         script: |
-          flutter pub deps
-          flutter pub outdated
+          rm -rf android
+          flutter create --org com.pmakpah.blendjam --project-name blendjam --platforms=android .
+      - name: Get dependencies
+        script: |
+          flutter pub get
       - name: Build APK
         script: |
           flutter build apk --release -v
