@@ -5,21 +5,21 @@ workflows:
     environment:
       flutter: 3.24.5
       xcode: latest
+      android_sdk: latest
     scripts:
       - name: Create Android
         script: flutter create --org com.blendjam --project-name blendjam --platforms android .
-      - name: Fix Android SDK to 35
+      - name: Force SDK 35
         script: |
-          sed -i '' 's/minSdkVersion 21/minSdkVersion 24/g' android/app/build.gradle || true
-          sed -i '' 's/minSdk 21/minSdk 24/g' android/app/build.gradle || true
-          sed -i '' 's/flutter.minSdkVersion/24/g' android/app/build.gradle || true
-          sed -i '' 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle || true
-          sed -i '' 's/compileSdk flutter.compileSdkVersion/compileSdk 35/g' android/app/build.gradle || true
-          sed -i '' 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 35/g' android/app/build.gradle || true
-          sed -i '' 's/targetSdk flutter.targetSdkVersion/targetSdk 35/g' android/app/build.gradle || true
+          echo "flutter.minSdkVersion=24" >> android/local.properties
+          echo "flutter.compileSdkVersion=35" >> android/local.properties
+          echo "flutter.targetSdkVersion=35" >> android/local.properties
+          echo "flutter.compileSdkVersion=35" >> android/gradle.properties || true
+          cat android/local.properties
+          grep -r "compileSdk" android/app/ || true
       - name: Pub get
         script: flutter pub get
       - name: Build APK
-        script: flutter build apk --release
+        script: flutter build apk --release --verbose
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
