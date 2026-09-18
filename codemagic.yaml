@@ -5,7 +5,6 @@ workflows:
     environment:
       flutter: 3.24.5
       xcode: latest
-      android_sdk: latest
     scripts:
       - name: Create Android
         script: flutter create --org com.blendjam --project-name blendjam --platforms android .
@@ -14,12 +13,10 @@ workflows:
           echo "flutter.minSdkVersion=24" >> android/local.properties
           echo "flutter.compileSdkVersion=35" >> android/local.properties
           echo "flutter.targetSdkVersion=35" >> android/local.properties
-          echo "flutter.compileSdkVersion=35" >> android/gradle.properties || true
           cat android/local.properties
-          grep -r "compileSdk" android/app/ || true
       - name: Pub get
         script: flutter pub get
       - name: Build APK
-        script: flutter build apk --release --verbose
+        script: flutter build apk --release
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
