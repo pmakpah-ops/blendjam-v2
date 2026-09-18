@@ -1,22 +1,16 @@
-workflows:
-  blendjam-v2:
-    name: blendjam-v2
-    instance_type: mac_mini_m2
-    environment:
-      flutter: 3.24.5
-      xcode: latest
-    scripts:
-      - name: Create Android
-        script: flutter create --org com.blendjam --project-name blendjam --platforms android .
-      - name: Force SDK 35
-        script: |
-          echo "flutter.minSdkVersion=24" >> android/local.properties
-          echo "flutter.compileSdkVersion=35" >> android/local.properties
-          echo "flutter.targetSdkVersion=35" >> android/local.properties
-          cat android/local.properties
-      - name: Pub get
-        script: flutter pub get
-      - name: Build APK
-        script: flutter build apk --release
-    artifacts:
-      - build/app/outputs/flutter-apk/*.apk
+name: blendjam
+description: BlendJam DJ - Auto crossfade
+publish_to: 'none'
+version: 1.0.0+1
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  just_audio: ^0.9.40
+  file_picker: ^8.1.2
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+flutter:
+  uses-material-design: true
