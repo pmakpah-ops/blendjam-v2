@@ -5,14 +5,15 @@ workflows:
     environment:
       flutter: 3.24.5
       xcode: latest
-    cache:
-      cache_paths: []
     scripts:
-      - name: Clean
-        script: flutter clean
-      - name: Create Android folder
-        script: flutter create --org com.blendjam --project-name blendjam --platforms android . --overwrite
-      - name: Get packages
+      - name: Create Android
+        script: flutter create --org com.blendjam --project-name blendjam --platforms android .
+      - name: Fix minSdk to 24
+        script: |
+          sed -i 's/minSdkVersion 21/minSdkVersion 24/g' android/app/build.gradle
+          sed -i 's/minSdk 21/minSdk 24/g' android/app/build.gradle
+          sed -i 's/flutter.minSdkVersion/24/g' android/app/build.gradle
+      - name: Pub get
         script: flutter pub get
       - name: Build APK
         script: flutter build apk --release
