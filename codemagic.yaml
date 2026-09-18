@@ -8,6 +8,16 @@ workflows:
     scripts:
       - name: Create Android
         script: flutter create --org com.blendjam --project-name blendjam --platforms android .
+      - name: Fix Android SDKs
+        script: |
+          echo "flutter.minSdkVersion=24" >> android/local.properties
+          echo "flutter.compileSdkVersion=35" >> android/local.properties
+          echo "flutter.targetSdkVersion=35" >> android/local.properties
+          sed -i '' 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle || true
+          sed -i '' 's/compileSdk flutter.compileSdkVersion/compileSdk 35/g' android/app/build.gradle || true
+          sed -i '' 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/g' android/app/build.gradle || true
+          sed -i '' 's/minSdk flutter.minSdkVersion/minSdk 24/g' android/app/build.gradle || true
+          cat android/local.properties
       - name: Pub get
         script: flutter pub get
       - name: Build APK
