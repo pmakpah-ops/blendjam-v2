@@ -10,9 +10,11 @@ workflows:
         script: flutter create --org com.blendjam --project-name blendjam --platforms android .
       - name: Fix minSdk to 24
         script: |
-          sed -i 's/minSdkVersion 21/minSdkVersion 24/g' android/app/build.gradle
-          sed -i 's/minSdk 21/minSdk 24/g' android/app/build.gradle
-          sed -i 's/flutter.minSdkVersion/24/g' android/app/build.gradle
+          sed -i '' 's/minSdkVersion 21/minSdkVersion 24/g' android/app/build.gradle || true
+          sed -i '' 's/minSdk 21/minSdk 24/g' android/app/build.gradle || true
+          sed -i '' 's/flutter.minSdkVersion/24/g' android/app/build.gradle || true
+          sed -i '' 's/flutter.minSdkVersion/24/g' android/local.properties || true
+          cat android/app/build.gradle | grep -i minsdk
       - name: Pub get
         script: flutter pub get
       - name: Build APK
