@@ -10,9 +10,9 @@ workflows:
     scripts:
       - name: Clean
         script: flutter clean
-      - name: Create Android
-        script: flutter create --org com.blendjam --project-name blendjam --platforms android. --overwrite
-      - name: Pub get
+      - name: Create Android folder
+        script: flutter create --org com.blendjam --project-name blendjam --platforms android . --overwrite
+      - name: Get packages
         script: flutter pub get
       - name: Build APK
         script: flutter build apk --release
