@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart'; // <- FIXED: removed _new
+import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
 
 void main() => runApp(const BlendJamApp());
 
@@ -63,31 +63,57 @@ class DJState extends State<DJPage> {
   late AudioPlayer playerA; late AudioPlayer playerB;
   String? nameA; String? nameB;
   double cross = 0.0;
-  List<String> queuePaths = []; List<String> queueNames = [];
-  bool autoMix = false; int autoMixIndex = -1;
-  bool isBlending = false; Timer? blendTimer;
-  Map<String, double> silenceMap = {};
+  bool isBlending = false;
 
   @override
   void initState() {
     super.initState();
     playerA = AudioPlayer(); playerB = AudioPlayer();
     updateVol();
-    blendTimer = Timer.periodic(const Duration(milliseconds: 500), (_) => checkBlend());
   }
-
-  @override void dispose() { blendTimer?.cancel(); playerA.dispose(); playerB.dispose(); super.dispose(); }
+  @override void dispose() { playerA.dispose(); playerB.dispose(); super.dispose(); }
 
   void updateVol() {
-    double a = (1 - cross).clamp(0.0, 1.0);
-    double b = cross.clamp(0.0, 1.0);
-    playerA.setVolume(a); playerB.setVolume(b);
+    playerA.setVolume((1 - cross).clamp(0.0, 1.0));
+    playerB.setVolume(cross.clamp(0.0, 1.0));
   }
 
-  Future<double> detectTrailingSilence(String path) async {
-    try {
-      final session = await FFmpegKit.execute(
-        '-i "$path" -af silencedetect=noise=-60dB:d=1 -f null -'
-      );
-      final logs = await session.getAllLogsAsString(); // <- This still works in v6.0.3
-      if (logs ==
+  Future<void> pickFile(bool isA) async {
+    var result = await FilePicker.platform.pickFiles(type: FileType.audio);
+    if (result == null) return;
+    String path = result.files.single.path!;
+    String name = result.files.single.name;
+    if (isA) {
+      await playerA.setFilePath(path);
+      setState(() => nameA = name);
+    } else {
+      await playerB.setFilePath(path);
+      setState(() => nameB = name);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('BlendJam DJ Mixer')),
+      body: Column(
+        children: [
+          Expanded(child: Row(children: [
+            Expanded(child: Column(children: [
+              Text(nameA?? 'Deck A'), MiniBars(player: playerA),
+              ElevatedButton(onPressed: () => pickFile(true), child: const Text('Load A')),
+              ElevatedButton(onPressed: () => playerA.play(), child: const Text('Play A')),
+            ])),
+            Expanded(child: Column(children: [
+              Text(nameB?? 'Deck B'), MiniBars(player: playerB),
+              ElevatedButton(onPressed: () => pickFile(false), child: const Text('Load B')),
+              ElevatedButton(onPressed: () => playerB.play(), child: const Text('Play B')),
+            ])),
+          ])),
+          Slider(value: cross, onChanged: (v){ setState(()=> cross=v); updateVol(); }),
+          const Padding(padding: EdgeInsets.all(8), child: Text('Crossfader')),
+        ],
+      ),
+    );
+  }
+}
