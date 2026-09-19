@@ -3,41 +3,21 @@ workflows:
     name: blendjam-v2
     instance_type: mac_mini_m2
     environment:
-      flutter: 3.32.8
+      flutter: 3.24.5
       xcode: latest
     scripts:
-      - name: Create Android
+      - name: Create
         script: flutter create --org com.blendjam --project-name blendjam --platforms android .
       - name: Pub get
         script: flutter pub get
-      - name: Fix NDK and Icon
+      - name: Fix Icon
         script: |
-          python3 << 'PY'
-          import pathlib, re
-          lp = pathlib.Path("android/local.properties")
-          txt = lp.read_text()
-          txt = re.sub(r'.*ndk.*\n', '', txt, flags=re.I)
-          txt += "\nflutter.minSdkVersion=24\nflutter.compileSdkVersion=35\nflutter.targetSdkVersion=35\nflutter.ndkVersion=27.0.12077973\n"
-          lp.write_text(txt)
-          for fp in ["android/app/build.gradle.kts", "android/app/build.gradle"]:
-              p = pathlib.Path(fp)
-              if not p.exists():
-                  continue
-              t = p.read_text()
-              t = re.sub(r'ndkVersion\s*=\s*".*?"', 'ndkVersion = "27.0.12077973"', t)
-              t = re.sub(r'ndkVersion\s*=\s*.*', 'ndkVersion = "27.0.12077973"', t)
-              t = re.sub(r'ndkVersion\s+".*?"', 'ndkVersion = "27.0.12077973"', t)
-              if "27.0.12077973" not in t:
-                  t = t.replace("android {", 'android {\n    ndkVersion = "27.0.12077973"')
-              p.write_text(t)
-          PY
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
           for d in android/app/src/main/res/mipmap-*; do
             cp assets/icon.png "$d/ic_launcher.png" || true
             cp assets/icon.png "$d/ic_launcher_round.png" || true
           done
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.0.12077973" > /dev/null
       - name: Build APK
-        script: flutter build apk --release
+        script: flutter build apk --release --no-tree-shake-icons
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
