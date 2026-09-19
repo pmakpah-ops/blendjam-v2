@@ -3,21 +3,24 @@ workflows:
     name: blendjam-v2
     instance_type: mac_mini_m2
     environment:
-      flutter: 3.24.5
+      flutter: 3.32.8
       xcode: latest
     scripts:
       - name: Create Android
         script: flutter create --org com.blendjam --project-name blendjam --platforms android .
-      - name: Fix Android SDKs
+      - name: Fix SDK 35 properly
         script: |
-          echo "flutter.minSdkVersion=24" >> android/local.properties
-          echo "flutter.compileSdkVersion=35" >> android/local.properties
-          echo "flutter.targetSdkVersion=35" >> android/local.properties
-          sed -i '' 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle || true
-          sed -i '' 's/compileSdk flutter.compileSdkVersion/compileSdk 35/g' android/app/build.gradle || true
-          sed -i '' 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/g' android/app/build.gradle || true
-          sed -i '' 's/minSdk flutter.minSdkVersion/minSdk 24/g' android/app/build.gradle || true
-          cat android/local.properties
+          python3 -c "
+          import pathlib
+          f=pathlib.Path('android/app/build.gradle')
+          t=f.read_text()
+          t=t.replace('flutter.compileSdkVersion','35').replace('flutter.targetSdkVersion','35').replace('flutter.minSdkVersion','24')
+          t=t.replace('compileSdk flutter','compileSdk 35 // flutter')
+          t=t.replace('minSdk flutter','minSdk 24 // flutter')
+          f.write_text(t)
+          print(t[:1500])
+          "
+          cat android/local.properties || true
       - name: Pub get
         script: flutter pub get
       - name: Build APK
