@@ -10,19 +10,21 @@ workflows:
         script: flutter create --org com.blendjam --project-name blendjam --platforms android .
       - name: Fix NDK 27 and SDK 35
         script: |
-          python3 -c "
-          import pathlib
-          p = pathlib.Path('android/app/build.gradle')
-          t = p.read_text()
-          t = t.replace('flutter.compileSdkVersion','35')
-          t = t.replace('flutter.targetSdkVersion','35')
-          t = t.replace('flutter.minSdkVersion','24')
-          t = t.replace('flutter.ndkVersion','\"27.0.12077973\"')
-          if 'ndkVersion' not in t:
-              t = t.replace('compileSdk 35', 'ndkVersion = \"27.0.12077973\"\n        compileSdk 35')
-          p.write_text(t)
-          print(t[:2000])
-          "
+          ls android/app/
+          echo "flutter.minSdkVersion=24" >> android/local.properties
+          echo "flutter.compileSdkVersion=35" >> android/local.properties
+          echo "flutter.targetSdkVersion=35" >> android/local.properties
+          echo "flutter.ndkVersion=27.0.12077973" >> android/local.properties
+          cat android/local.properties
+          # Fix both old and new Gradle files
+          for f in android/app/build.gradle android/app/build.gradle.kts; do
+            if [ -f "$f" ]; then
+              echo "Fixing $f"
+              sed -i '' 's/flutter.compileSdkVersion/35/g' "$f" || sed -i 's/flutter.compileSdkVersion/35/g' "$f" || true
+              sed -i '' 's/flutter.minSdkVersion/24/g' "$f" || sed -i 's/flutter.minSdkVersion/24/g' "$f" || true
+              sed -i '' 's/flutter.ndkVersion/\"27.0.12077973\"/g' "$f" || sed -i 's/flutter.ndkVersion/\"27.0.12077973\"/g' "$f" || true
+            fi
+          done
       - name: Pub get
         script: flutter pub get
       - name: Build APK
