@@ -8,19 +8,21 @@ workflows:
     scripts:
       - name: Create Android
         script: flutter create --org com.blendjam --project-name blendjam --platforms android .
-      - name: Fix SDK 35 properly
+      - name: Fix NDK 27 and SDK 35
         script: |
           python3 -c "
           import pathlib
-          f=pathlib.Path('android/app/build.gradle')
-          t=f.read_text()
-          t=t.replace('flutter.compileSdkVersion','35').replace('flutter.targetSdkVersion','35').replace('flutter.minSdkVersion','24')
-          t=t.replace('compileSdk flutter','compileSdk 35 // flutter')
-          t=t.replace('minSdk flutter','minSdk 24 // flutter')
-          f.write_text(t)
-          print(t[:1500])
+          p = pathlib.Path('android/app/build.gradle')
+          t = p.read_text()
+          t = t.replace('flutter.compileSdkVersion','35')
+          t = t.replace('flutter.targetSdkVersion','35')
+          t = t.replace('flutter.minSdkVersion','24')
+          t = t.replace('flutter.ndkVersion','\"27.0.12077973\"')
+          if 'ndkVersion' not in t:
+              t = t.replace('compileSdk 35', 'ndkVersion = \"27.0.12077973\"\n        compileSdk 35')
+          p.write_text(t)
+          print(t[:2000])
           "
-          cat android/local.properties || true
       - name: Pub get
         script: flutter pub get
       - name: Build APK
