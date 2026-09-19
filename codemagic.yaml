@@ -7,26 +7,40 @@ workflows:
       xcode: latest
     scripts:
       - name: Create Android
-        script: flutter create --org com.blendjam --project-name blendjam --platforms android .
+        script: |
+          flutter create --org com.blendjam --project-name blendjam --platforms android .
+          # Install required NDK 27
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.0.12077973"
       - name: Fix NDK + Icon
         script: |
+          # Clean old NDK settings
+          sed -i '' '/ndk/d' android/local.properties 2>/dev/null || sed -i '/ndk/d' android/local.properties
+          sed -i '' '/NDK/d' android/local.properties 2>/dev/null || sed -i '/NDK/d' android/local.properties
+          
           echo "flutter.minSdkVersion=24" >> android/local.properties
           echo "flutter.compileSdkVersion=35" >> android/local.properties
           echo "flutter.targetSdkVersion=35" >> android/local.properties
           echo "flutter.ndkVersion=27.0.12077973" >> android/local.properties
+          
+          # FORCE in build.gradle too (this is the key fix)
+          sed -i '' 's/ndkVersion.*/ndkVersion "27.0.12077973"/' android/app/build.gradle 2>/dev/null || sed -i 's/ndkVersion.*/ndkVersion "27.0.12077973"/' android/app/build.gradle
+          # If ndkVersion line doesn't exist, add it
+          if ! grep -q "ndkVersion" android/app/build.gradle; then
+            sed -i '' '/android {/a\
+            ndkVersion "27.0.12077973"
+          ' android/app/build.gradle 2>/dev/null || sed -i '/android {/a ndkVersion "27.0.12077973"' android/app/build.gradle
+          fi
+          
           cat android/local.properties
-          # Copy your 31KB icon to all densities
+          cat android/app/build.gradle | grep -A2 -B2 ndk
+          
+          # Your 31KB icon
           if [ -f "assets/icon.png" ]; then
-            echo "Found assets/icon.png - installing"
             for d in android/app/src/main/res/mipmap-*; do
               cp assets/icon.png $d/ic_launcher.png
               cp assets/icon.png $d/launcher_icon.png
-              cp assets/icon.png $d/ic_launcher_round.png 2>/dev/null || true
             done
-            ls -lh android/app/src/main/res/mipmap-xxxhdpi/
-          else
-            echo "ERROR: assets/icon.png not found"
-            ls assets/
+            echo "Icon installed"
           fi
       - name: Pub get
         script: flutter pub get
