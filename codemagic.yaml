@@ -10,29 +10,33 @@ workflows:
         script: flutter create --org com.blendjam --project-name blendjam --platforms android .
       - name: Pub get
         script: flutter pub get
-      - name: FORCE NDK 27 AFTER pub get
+      - name: FIX KTS - The real file
         script: |
           python3 << 'PY'
           import pathlib, re
+          # 1. Fix local.properties
           lp = pathlib.Path("android/local.properties")
-          txt = lp.read_text()
-          txt = re.sub(r'.*ndk.*\n', '', txt, flags=re.I)
+          txt = re.sub(r'.*ndk.*\n', '', lp.read_text(), flags=re.I)
           txt += "\nflutter.minSdkVersion=24\nflutter.compileSdkVersion=35\nflutter.targetSdkVersion=35\nflutter.ndkVersion=27.0.12077973\n"
           lp.write_text(txt)
-          print(txt)
 
-          bg = pathlib.Path("android/app/build.gradle")
-          gtxt = bg.read_text()
-          if "ndkVersion" in gtxt:
-              gtxt = re.sub(r'ndkVersion\s+"[^"]+"', 'ndkVersion "27.0.12077973"', gtxt)
-              gtxt = re.sub(r'ndkVersion\s+flutter\..*', 'ndkVersion "27.0.12077973"', gtxt)
-          else:
-              gtxt = gtxt.replace("android {", 'android {\n    ndkVersion "27.0.12077973"')
-          bg.write_text(gtxt)
-          print("FIXED build.gradle")
+          # 2. Fix BOTH gradle files - KTS is the real one now!
+          for path in ["android/app/build.gradle", "android/app/build.gradle.kts"]:
+              p = pathlib.Path(path)
+              if not p.exists(): continue
+              gtxt = p.read_text()
+              print(f"Fixing {path}")
+              if "ndkVersion" in gtxt:
+                  gtxt = re.sub(r'ndkVersion\s*=\s*".*?"', 'ndkVersion = "27.0.12077973"', gtxt)
+                  gtxt = re.sub(r'ndkVersion\s+".*?"', 'ndkVersion = "27.0.12077973"', gtxt)
+                  gtxt = re.sub(r'ndkVersion\s*=.*flutter.*', 'ndkVersion = "27.0.12077973"', gtxt)
+              else:
+                  gtxt = gtxt.replace("android {", 'android {\n    ndkVersion = "27.0.12077973"')
+              p.write_text(gtxt)
+              print(gtxt[:800])
           PY
           
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.0.12077973" > /dev/null
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.0.12077973"
           
           for d in android/app/src/main/res/mipmap-*; do
             cp assets/icon.png $d/ic_launcher.png 2>/dev/null || true
