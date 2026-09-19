@@ -1,7 +1,7 @@
 name: blendjam
 description: BlendJam DJ
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+2
 environment:
   sdk: '>=3.3.0 <4.0.0'
 dependencies:
@@ -9,8 +9,13 @@ dependencies:
     sdk: flutter
   just_audio: ^0.9.40
   file_picker: ^8.1.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^3.0.0
+
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon.png
