@@ -9,8 +9,11 @@ class BlendJamApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'BlendJam',
-      theme: ThemeData.dark(useMaterial3: true),
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        cardColor: const Color(0xFF1E1E1E),
+        colorScheme: const ColorScheme.dark(primary: Color(0xFFCEBBFF)),
+      ),
       home: const DJScreen(),
       debugShowCheckedModeBanner: false,
     );
@@ -26,58 +29,84 @@ class DJScreen extends StatefulWidget {
 class _DJScreenState extends State<DJScreen> {
   final playerA = AudioPlayer();
   final playerB = AudioPlayer();
+  String? nameA, nameB;
   double crossfade = 0.5;
-  String? trackA, trackB;
+  bool autoMix = false;
 
   Future<void> pickTrack(bool isA) async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.audio);
-    if (result != null) {
-      final path = result.files.single.path!;
-      if (isA) {
-        trackA = path;
-        await playerA.setFilePath(path);
-        await playerA.setLoopMode(LoopMode.all);
-        await playerA.play();
-      } else {
-        trackB = path;
-        await playerB.setFilePath(path);
-        await playerB.setLoopMode(LoopMode.all);
-        await playerB.play();
-      }
-      setState(() {});
-      playerA.setVolume(1.0 - crossfade);
-      playerB.setVolume(crossfade);
-    }
+    final r = await FilePicker.platform.pickFiles(type: FileType.audio);
+    if (r == null) return;
+    final path = r.files.single.path!;
+    final name = r.files.single.name;
+    final p = isA ? playerA : playerB;
+    await p.setFilePath(path);
+    setState(() { isA ? nameA = name : nameB = name; });
   }
 
-  @override
-  void dispose() {
-    playerA.dispose();
-    playerB.dispose();
-    super.dispose();
+  Widget deck(bool isA) {
+    final player = isA ? playerA : playerB;
+    final name = isA ? nameA : nameB;
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Text('DECK ${isA ? 'A' : 'B'}', style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(name ?? 'No track', style: const TextStyle(color: Colors.white70), overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 10),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              IconButton(icon: const Icon(Icons.folder_outlined), onPressed: () => pickTrack(isA)),
+              StreamBuilder<PlayerState>(
+                stream: player.playerStateStream,
+                builder: (c, snap) {
+                  final playing = snap.data?.playing ?? false;
+                  return IconButton(
+                    iconSize: 32,
+                    icon: Icon(playing ? Icons.pause : Icons.play_arrow),
+                    onPressed: () { playing ? player.pause() : player.play(); },
+                  );
+                },
+              ),
+            ]),
+            StreamBuilder<Duration>(
+              stream: player.positionStream,
+              builder: (c, snap) {
+                final pos = snap.data ?? Duration.zero;
+                final dur = player.duration ?? Duration.zero;
+                final max = dur.inMilliseconds > 0 ? dur.inMilliseconds.toDouble() : 1.0;
+                return Column(children: [
+                  Slider(value: pos.inMilliseconds.clamp(0, max.toInt()).toDouble(), min: 0, max: max, onChanged: (v) => player.seek(Duration(milliseconds: v.toInt()))),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Text(_fmt(pos), style: const TextStyle(fontSize: 11)),
+                    Text(_fmt(dur), style: const TextStyle(fontSize: 11)),
+                  ]),
+                ]);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
+
+  String _fmt(Duration d) => "${d.inMinutes.remainder(60).toString().padLeft(2,'0')}:${(d.inSeconds.remainder(60)).toString().padLeft(2,'0')}";
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('BlendJam V2')),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(child: ElevatedButton(onPressed: () => pickTrack(true), child: Text(trackA == null ? 'Load A' : 'A OK'))),
-                const SizedBox(width: 10),
-                Expanded(child: ElevatedButton(onPressed: () => pickTrack(false), child: Text(trackB == null ? 'Load B' : 'B OK'))),
-              ],
-            ),
-            const SizedBox(height: 30),
-            Slider(value: crossfade, onChanged: (v) { setState(() => crossfade = v); playerA.setVolume(1.0 - v); playerB.setVolume(v); }),
-            Text('Mix: ${(crossfade*100).toInt()}% B'),
-          ],
-        ),
-      ),
+      appBar: AppBar(title: const Text('BlendJam'), actions: [
+        const Icon(Icons.queue_music), const SizedBox(width:4),
+        const Text('Auto'), Switch(value: autoMix, onChanged: (v) => setState(()=>autoMix=v)), const SizedBox(width:12),
+      ]),
+      body: ListView(padding: const EdgeInsets.all(16), children: [
+        deck(true),
+        Row(children: [const Text('A'), Expanded(child: Slider(value: crossfade, onChanged: (v){setState(()=>crossfade=v); playerA.setVolume(1-v); playerB.setVolume(v);})), const Text('B')]),
+        deck(false),
+        const SizedBox(height:20),
+        OutlinedButton.icon(onPressed: ()=>pickTrack(false), icon: const Icon(Icons.add), label: const Text('Add songs to queue')),
+      ]),
     );
   }
 }
