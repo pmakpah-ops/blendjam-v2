@@ -6,26 +6,21 @@ workflows:
       flutter: 3.24.5
       xcode: latest
     scripts:
-      - name: Create and Fix SDK 35
+      - name: Create
         script: |
           flutter create --org com.blendjam --project-name blendjam --platforms android .
-          # FORCE SDK 35 - overwrite local.properties completely
-          cat > android/local.properties <<EOF
+          cat > android/local.properties <<'EOF'
           sdk.dir=/Users/builder/programs/android-sdk
           flutter.minSdkVersion=24
           flutter.compileSdkVersion=35
           flutter.targetSdkVersion=35
           flutter.ndkVersion=26.3.11579264
           EOF
-          # Patch gradle files
-          perl -i -pe 's/compileSdkVersion.*/compileSdkVersion 35/g' android/app/build.gradle || true
-          perl -i -pe 's/compileSdk 34/compileSdk 35/g' android/app/build.gradle.kts || true
-          perl -i -pe 's/targetSdkVersion.*/targetSdkVersion 35/g' android/app/build.gradle || true
-          perl -i -pe 's/targetSdk 34/targetSdk 35/g' android/app/build.gradle.kts || true
-          perl -i -pe 's/flutter\.compileSdkVersion.*/35/g' android/app/build.gradle || true
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
-          for d in android/app/src/main/res/mipmap-*; do cp assets/icon.png "$d/ic_launcher.png" || true; cp assets/icon.png "$d/ic_launcher_round.png" || true; done
-          cat android/local.properties
+          for d in android/app/src/main/res/mipmap-*; do
+            cp assets/icon.png "$d/ic_launcher.png" || true
+            cp assets/icon.png "$d/ic_launcher_round.png" || true
+          done
       - name: Pub get
         script: flutter pub get
       - name: Build APK
