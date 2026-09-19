@@ -1,21 +1,16 @@
 name: blendjam
-description: BlendJam DJ Mixer
+description: BlendJam DJ
 publish_to: 'none'
 version: 1.0.0+1
-
 environment:
   sdk: '>=3.3.0 <4.0.0'
-
 dependencies:
   flutter:
     sdk: flutter
   just_audio: ^0.9.40
   file_picker: ^8.1.2
-  ffmpeg_kit_flutter: ^6.0.3
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
 flutter:
   uses-material-design: true
