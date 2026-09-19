@@ -6,7 +6,7 @@ workflows:
       flutter: 3.24.5
       xcode: latest
     scripts:
-      - name: Create and Force SDK 35
+      - name: Create
         script: |
           flutter create --org com.blendjam --project-name blendjam --platforms android .
           cat > android/local.properties <<'EOF'
@@ -16,35 +16,16 @@ workflows:
           flutter.targetSdkVersion=35
           flutter.ndkVersion=26.3.11579264
           EOF
-          python3 << 'PY'
-          import pathlib, re
-          for p in pathlib.Path("android").rglob("build.gradle"):
-              t = p.read_text()
-              # Replace flutter.compileSdkVersion -> 35, flutter.targetSdkVersion -> 35
-              t = t.replace("flutter.compileSdkVersion", "35")
-              t = t.replace("flutter.targetSdkVersion", "35")
-              t = t.replace("flutter.minSdkVersion", "24")
-              # Handle ndkVersion
-              t = re.sub(r'ndkVersion.*flutter\.ndkVersion', 'ndkVersion "26.3.11579264"', t)
-              t = re.sub(r'compileSdkVersion 34', 'compileSdkVersion 35', t)
-              t = re.sub(r'compileSdk 34', 'compileSdk 35', t)
-              p.write_text(t)
-              print(f"Patched {p}")
-          for p in pathlib.Path("android").rglob("build.gradle.kts"):
-              t = p.read_text()
-              t = t.replace("flutter.compileSdkVersion", "35")
-              t = t.replace("flutter.targetSdkVersion", "35")
-              t = t.replace("flutter.minSdkVersion", "24")
-              t = re.sub(r'ndkVersion =.*', 'ndkVersion = "26.3.11579264"', t)
-              t = re.sub(r'compileSdk = 34', 'compileSdk = 35', t)
-              p.write_text(t)
-              print(f"Patched {p}")
-          PY
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
-          for d in android/app/src/main/res/mipmap-*; do cp assets/icon.png "$d/ic_launcher.png" || true; cp assets/icon.png "$d/ic_launcher_round.png" || true; done
+          for d in android/app/src/main/res/mipmap-*; do cp assets/icon.png "$d/ic_launcher.png" 2>/dev/null; cp assets/icon.png "$d/ic_launcher_round.png" 2>/dev/null; done
+          # Only force compileSdk to 35 without breaking syntax
+          sed -i '' 's/flutter.compileSdkVersion/35/g' android/app/build.gradle
+          sed -i '' 's/flutter.targetSdkVersion/35/g' android/app/build.gradle
+          sed -i '' 's/flutter.minSdkVersion/24/g' android/app/build.gradle
+          sed -i '' 's/flutter.ndkVersion/"26.3.11579264"/g' android/app/build.gradle
       - name: Pub get
         script: flutter pub get
       - name: Build APK
-        script: flutter build apk --release --no-tree-shake-icons -v
+        script: flutter build apk --release --no-tree-shake-icons
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
