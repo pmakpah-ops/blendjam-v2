@@ -10,8 +10,17 @@ workflows:
         script: flutter create --org com.blendjam --project-name blendjam --platforms android .
       - name: Pub get
         script: flutter pub get
-      - name: Fix Icon
+      - name: Fix SDK and Icon
         script: |
+          echo "flutter.minSdkVersion=24
+          flutter.compileSdkVersion=35
+          flutter.targetSdkVersion=35
+          flutter.ndkVersion=26.3.11579264" >> android/local.properties
+          # patch build.gradle
+          sed -i '' 's/compileSdkVersion 34/compileSdkVersion 35/g' android/app/build.gradle || true
+          sed -i '' 's/compileSdk 34/compileSdk 35/g' android/app/build.gradle.kts || true
+          sed -i '' 's/targetSdkVersion 34/targetSdkVersion 35/g' android/app/build.gradle || true
+          sed -i '' 's/targetSdk 34/targetSdk 35/g' android/app/build.gradle.kts || true
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
           for d in android/app/src/main/res/mipmap-*; do
             cp assets/icon.png "$d/ic_launcher.png" || true
