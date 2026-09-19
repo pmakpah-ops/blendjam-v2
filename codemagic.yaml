@@ -1,48 +1,10 @@
-workflows:
-  blendjam-v2:
-    name: blendjam-v2
-    instance_type: mac_mini_m2
-    environment:
-      flutter: 3.32.8
-      xcode: latest
-    scripts:
-      - name: Create Android + Install NDK 27
-        script: |
-          flutter create --org com.blendjam --project-name blendjam --platforms android .
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.0.12077973"
-      - name: FORCE NDK 27 with Python
-        script: |
-          python3 << 'PY'
-          import pathlib, re
-          # 1. Fix local.properties
-          lp = pathlib.Path("android/local.properties")
-          txt = lp.read_text() if lp.exists() else ""
-          txt = re.sub(r'.*ndk.*\n', '', txt, flags=re.I)
-          txt += "\nflutter.minSdkVersion=24\nflutter.compileSdkVersion=35\nflutter.targetSdkVersion=35\nflutter.ndkVersion=27.0.12077973\n"
-          lp.write_text(txt)
-          print("=== local.properties ===\n", txt)
-
-          # 2. Fix build.gradle - this is what was failing
-          bg = pathlib.Path("android/app/build.gradle")
-          gtxt = bg.read_text()
-          if "ndkVersion" in gtxt:
-              gtxt = re.sub(r'ndkVersion\s+"[^"]+"', 'ndkVersion "27.0.12077973"', gtxt)
-          else:
-              gtxt = gtxt.replace("android {", 'android {\n    ndkVersion "27.0.12077973"')
-          bg.write_text(gtxt)
-          print("=== build.gradle NDK line ===")
-          for line in gtxt.splitlines():
-              if "ndk" in line.lower(): print(line)
-          PY
-          
-          # 3. Your icon - 31KB only
-          for d in android/app/src/main/res/mipmap-*; do
-            cp assets/icon.png $d/ic_launcher.png
-            cp assets/icon.png $d/launcher_icon.png
-          done
-      - name: Pub get
-        script: flutter pub get
-      - name: Build APK
-        script: flutter build apk --release
-    artifacts:
-      - build/app/outputs/flutter-apk/*.apk
+Show command
+Running Gradle task 'assembleRelease'...                        
+Checking the license for package NDK (Side by side) 26.3.11579264 in /usr/local/share/android-sdk/licenses
+License for package NDK (Side by side) 26.3.11579264 accepted.
+Preparing "Install NDK (Side by side) 26.3.11579264 v.26.3.11579264".
+"Install NDK (Side by side) 26.3.11579264 v.26.3.11579264" ready.
+Installing NDK (Side by side) 26.3.11579264 in /usr/local/share/android-sdk/ndk/26.3.11579264
+"Install NDK (Side by side) 26.3.11579264 v.26.3.11579264" complete.
+"Install NDK (Side by side) 26.3.11579264 v.26.3.11579264" finished.
+Your project is configured with Android NDK 26.3.11579264, but 
