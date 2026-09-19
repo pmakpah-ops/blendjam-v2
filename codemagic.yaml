@@ -8,23 +8,26 @@ workflows:
     scripts:
       - name: Create Android
         script: flutter create --org com.blendjam --project-name blendjam --platforms android .
-      - name: Fix NDK 27 and SDK 35
+      - name: Fix NDK + Icon
         script: |
-          ls android/app/
           echo "flutter.minSdkVersion=24" >> android/local.properties
           echo "flutter.compileSdkVersion=35" >> android/local.properties
           echo "flutter.targetSdkVersion=35" >> android/local.properties
           echo "flutter.ndkVersion=27.0.12077973" >> android/local.properties
           cat android/local.properties
-          # Fix both old and new Gradle files
-          for f in android/app/build.gradle android/app/build.gradle.kts; do
-            if [ -f "$f" ]; then
-              echo "Fixing $f"
-              sed -i '' 's/flutter.compileSdkVersion/35/g' "$f" || sed -i 's/flutter.compileSdkVersion/35/g' "$f" || true
-              sed -i '' 's/flutter.minSdkVersion/24/g' "$f" || sed -i 's/flutter.minSdkVersion/24/g' "$f" || true
-              sed -i '' 's/flutter.ndkVersion/\"27.0.12077973\"/g' "$f" || sed -i 's/flutter.ndkVersion/\"27.0.12077973\"/g' "$f" || true
-            fi
-          done
+          # Copy your 31KB icon to all densities
+          if [ -f "assets/icon.png" ]; then
+            echo "Found assets/icon.png - installing"
+            for d in android/app/src/main/res/mipmap-*; do
+              cp assets/icon.png $d/ic_launcher.png
+              cp assets/icon.png $d/launcher_icon.png
+              cp assets/icon.png $d/ic_launcher_round.png 2>/dev/null || true
+            done
+            ls -lh android/app/src/main/res/mipmap-xxxhdpi/
+          else
+            echo "ERROR: assets/icon.png not found"
+            ls assets/
+          fi
       - name: Pub get
         script: flutter pub get
       - name: Build APK
