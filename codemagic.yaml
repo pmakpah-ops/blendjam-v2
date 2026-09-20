@@ -5,10 +5,15 @@ workflows:
     environment:
       flutter: stable
     scripts:
-      - name: Build
+      - name: Fix and Build
         script: |
           flutter create --org com.blendjam --project-name blendjam --platforms android .
-          printf "sdk.dir=/Users/builder/programs/android-sdk\nflutter.compileSdkVersion=35\nflutter.targetSdkVersion=35\nflutter.minSdkVersion=24\nflutter.ndkVersion=26.3.11579264\n" > android/local.properties
+          echo "sdk.dir=/Users/builder/programs/android-sdk" > android/local.properties
+          echo "flutter.compileSdkVersion=35" >> android/local.properties
+          echo "flutter.targetSdkVersion=35" >> android/local.properties
+          echo "flutter.minSdkVersion=24" >> android/local.properties
+          echo "flutter.ndkVersion=26.3.11579264" >> android/local.properties
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
           flutter pub get
           flutter build apk --release --no-tree-shake-icons
     artifacts:
