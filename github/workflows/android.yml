@@ -1,0 +1,29 @@
+name: Build APK
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+      - name: Fix SDK and Build
+        run: |
+          flutter create --org com.blendjam --project-name blendjam --platforms android.
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+          echo "flutter.compileSdkVersion=35" >> android/local.properties
+          echo "flutter.targetSdkVersion=35" >> android/local.properties
+          echo "flutter.minSdkVersion=24" >> android/local.properties
+          echo "flutter.ndkVersion=26.3.11579264" >> android/local.properties
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          flutter pub get
+          flutter build apk --release --no-tree-shake-icons
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: build/app/outputs/flutter-apk/app-release.apk
