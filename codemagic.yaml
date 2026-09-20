@@ -9,20 +9,23 @@ workflows:
       - name: Create
         script: |
           flutter create --org com.blendjam --project-name blendjam --platforms android .
-          cat > android/local.properties <<'EOF'
-          sdk.dir=/Users/builder/programs/android-sdk
-          flutter.minSdkVersion=24
-          flutter.compileSdkVersion=35
-          flutter.targetSdkVersion=35
-          flutter.ndkVersion=26.3.11579264
-          EOF
+          printf "sdk.dir=/Users/builder/programs/android-sdk\nflutter.minSdkVersion=24\nflutter.compileSdkVersion=35\nflutter.targetSdkVersion=35\nflutter.ndkVersion=26.3.11579264\n" > android/local.properties
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
-          for d in android/app/src/main/res/mipmap-*; do cp assets/icon.png "$d/ic_launcher.png" 2>/dev/null; cp assets/icon.png "$d/ic_launcher_round.png" 2>/dev/null; done
-          # Only force compileSdk to 35 without breaking syntax
-          sed -i '' 's/flutter.compileSdkVersion/35/g' android/app/build.gradle
-          sed -i '' 's/flutter.targetSdkVersion/35/g' android/app/build.gradle
-          sed -i '' 's/flutter.minSdkVersion/24/g' android/app/build.gradle
-          sed -i '' 's/flutter.ndkVersion/"26.3.11579264"/g' android/app/build.gradle
+          cp assets/icon.png android/app/src/main/res/mipmap-hdpi/ic_launcher.png || true
+          cp assets/icon.png android/app/src/main/res/mipmap-mdpi/ic_launcher.png || true
+          cp assets/icon.png android/app/src/main/res/mipmap-xhdpi/ic_launcher.png || true
+          cp assets/icon.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png || true
+          cp assets/icon.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png || true
+      - name: Force SDK 35
+        script: |
+          python3 -c "
+          import pathlib
+          p=pathlib.Path('android/app/build.gradle')
+          t=p.read_text()
+          t=t.replace('flutter.compileSdkVersion','35').replace('flutter.targetSdkVersion','35').replace('flutter.minSdkVersion','24').replace('flutter.ndkVersion','\"26.3.11579264\"')
+          p.write_text(t)
+          print(t[:1000])
+          "
       - name: Pub get
         script: flutter pub get
       - name: Build APK
