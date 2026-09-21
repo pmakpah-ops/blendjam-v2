@@ -176,7 +176,7 @@ class _DJScreenState extends State<DJScreen> {
     final sourcePlayer = _playerFor(sourceDeck);
     final targetPlayer = _playerFor(targetDeck);
 
-    // Load the next queued song if the target deck is empty.
+    // Load the next queued song into the free deck.
     if (_nameFor(targetDeck) == null) {
       if (queue.isEmpty) {
         return;
@@ -210,7 +210,7 @@ class _DJScreenState extends State<DJScreen> {
       });
     }
 
-    // Target deck starts completely silent.
+    // Target deck starts silently.
     await targetPlayer.setVolume(0.0);
 
     // Start target deck.
@@ -218,11 +218,18 @@ class _DJScreenState extends State<DJScreen> {
       await targetPlayer.play();
     }
 
-    // Exactly 10 seconds.
+    // ------------------------------------------------------------
+    // 10-SECOND CROSSFADE
+    // ------------------------------------------------------------
+    //
+    // We use 100 steps of 100ms = exactly 10 seconds.
+    //
     const int steps = 100;
+    const Duration stepDuration =
+        Duration(milliseconds: 100);
 
-    for (int i = 0; i <= steps; i++) {
-      final value = i / steps;
+    for (int step = 1; step <= steps; step++) {
+      final value = step / steps;
 
       if (sourceDeck == Deck.a) {
         crossfade = value;
@@ -250,22 +257,32 @@ class _DJScreenState extends State<DJScreen> {
         setState(() {});
       }
 
-      await Future.delayed(
-        const Duration(milliseconds: 100),
-      );
+      if (step < steps) {
+        await Future.delayed(stepDuration);
+      }
+    }
+
+    // Make sure final volumes are correct.
+    if (sourceDeck == Deck.a) {
+      crossfade = 1.0;
+
+      await sourcePlayer.setVolume(0.0);
+      await targetPlayer.setVolume(1.0);
+    } else {
+      crossfade = 0.0;
+
+      await sourcePlayer.setVolume(0.0);
+      await targetPlayer.setVolume(1.0);
     }
 
     // Stop the old deck.
     await sourcePlayer.stop();
 
-    await sourcePlayer.setVolume(0.0);
-
-    await targetPlayer.setVolume(1.0);
-
-    // Target becomes the active deck.
+    // Target becomes the active/live deck.
     activeDeck = targetDeck;
 
-    crossfade = activeDeck == Deck.a ? 0.0 : 1.0;
+    crossfade =
+        activeDeck == Deck.a ? 0.0 : 1.0;
 
     if (mounted) {
       setState(() {
@@ -512,7 +529,8 @@ class _DJScreenState extends State<DJScreen> {
 
     await otherPlayer.setVolume(0.0);
 
-    crossfade = deck == Deck.a ? 0.0 : 1.0;
+    crossfade =
+        deck == Deck.a ? 0.0 : 1.0;
 
     await player.play();
 
@@ -552,4 +570,316 @@ class _DJScreenState extends State<DJScreen> {
 
     final name = _nameFor(deck);
 
-    final isActive = activeDeck
+    final isActive = activeDeck == deck;
+
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          children: [
+            Text(
+              'DECK ${isA ? 'A' : 'B'} '
+              '${isActive ? '(LIVE)' : '(NEXT)'}',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: isActive
+                    ? const Color(0xFFCEBBFF)
+                    : Colors.white70,
+              ),
+            ),
+
+            const SizedBox(height: 4),
+
+            Text(
+              name ?? 'No track',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            Row(
+              mainAxisAlignment:
+                  MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(
+                    Icons.folder_open,
+                  ),
+                  onPressed: () {
+                    pickTrack(isA);
+                  },
+                ),
+
+                StreamBuilder<PlayerState>(
+                  stream:
+                      player.playerStateStream,
+                  builder:
+                      (context, snapshot) {
+                    final playing =
+                        snapshot.data?.playing ??
+                            false;
+
+                    return IconButton(
+                      iconSize: 36,
+                      icon: Icon(
+                        playing
+                            ? Icons
+                                .pause_circle_filled
+                            : Icons
+                                .play_circle_fill,
+                        color:
+                            const Color(0xFFCEBBFF),
+                      ),
+                      onPressed: () {
+                        togglePlay(deck);
+                      },
+                    );
+                  },
+                ),
+
+                IconButton(
+                  icon: const Icon(
+                    Icons.stop,
+                  ),
+                  onPressed: () {
+                    stopDeck(deck);
+                  },
+                ),
+              ],
+            ),
+
+            StreamBuilder<Duration>(
+              stream: player.positionStream,
+              builder:
+                  (context, snapshot) {
+                final position =
+                    snapshot.data ??
+                        Duration.zero;
+
+                final duration =
+                    player.duration ??
+                        Duration.zero;
+
+                final max =
+                    duration.inMilliseconds >
+                            0
+                        ? duration.inMilliseconds
+                            .toDouble()
+                        : 1.0;
+
+                final value =
+                    position.inMilliseconds
+                        .toDouble()
+                        .clamp(0.0, max);
+
+                return Column(
+                  children: [
+                    Slider(
+                      value: value,
+                      min: 0.0,
+                      max: max,
+                      activeColor:
+                          const Color(
+                        0xFFCEBBFF,
+                      ),
+                      onChanged:
+                          (newPosition) {
+                        player.seek(
+                          Duration(
+                            milliseconds:
+                                newPosition
+                                    .toInt(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    Row(
+                      mainAxisAlignment:
+                          MainAxisAlignment
+                              .spaceBetween,
+                      children: [
+                        Text(
+                          _formatDuration(
+                            position,
+                          ),
+                          style:
+                              const TextStyle(
+                            fontSize: 10,
+                          ),
+                        ),
+                        Text(
+                          _formatDuration(
+                            duration,
+                          ),
+                          style:
+                              const TextStyle(
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // TIME FORMAT
+  // ============================================================
+
+  String _formatDuration(
+    Duration duration,
+  ) {
+    final minutes = duration.inMinutes
+        .remainder(60)
+        .toString()
+        .padLeft(2, '0');
+
+    final seconds = duration.inSeconds
+        .remainder(60)
+        .toString()
+        .padLeft(2, '0');
+
+    return '$minutes:$seconds';
+  }
+
+  // ============================================================
+  // MAIN UI
+  // ============================================================
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'BlendJam',
+        ),
+        actions: [
+          Row(
+            children: [
+              const Text(
+                'AUTO MIX',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              Switch(
+                value: autoMix,
+                activeColor:
+                    const Color(0xFFCEBBFF),
+                onChanged: (value) {
+                  setState(() {
+                    autoMix = value;
+                  });
+                },
+              ),
+
+              const SizedBox(width: 8),
+            ],
+          ),
+        ],
+      ),
+
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          // ------------------------------------------------------
+          // DECK A
+          // ------------------------------------------------------
+          deckWidget(true),
+
+          // ------------------------------------------------------
+          // CROSSFADER
+          // ------------------------------------------------------
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(
+              vertical: 4,
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'A',
+                      style: TextStyle(
+                        fontSize: 10,
+                      ),
+                    ),
+
+                    Expanded(
+                      child: Slider(
+                        value: crossfade,
+                        min: 0.0,
+                        max: 1.0,
+                        onChanged:
+                            _handleCrossfade,
+                      ),
+                    ),
+
+                    const Text(
+                      'B',
+                      style: TextStyle(
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+
+                if (autoMix)
+                  const Text(
+                    'Auto Mix: transition starts during the final 10 seconds.',
+                    textAlign:
+                        TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: Colors.white54,
+                    ),
+                  ),
+
+                if (isCrossfading)
+                  const LinearProgressIndicator(
+                    color:
+                        Color(0xFFCEBBFF),
+                  ),
+              ],
+            ),
+          ),
+
+          // ------------------------------------------------------
+          // DECK B
+          // ------------------------------------------------------
+          deckWidget(false),
+
+          const SizedBox(
+            height: 16,
+          ),
+
+          // ------------------------------------------------------
+          // QUEUE HEADER
+          // ------------------------------------------------------
+          Row(
+            mainAxisAlignment:
+                MainAxisAlignment
+                    .spaceBetween,
+            children: [
+              Text(
+                'QUEUE (${queue.length}) - Tap to load',
+                style: cons
