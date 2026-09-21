@@ -176,7 +176,7 @@ class _DJScreenState extends State<DJScreen> {
     final sourcePlayer = _playerFor(sourceDeck);
     final targetPlayer = _playerFor(targetDeck);
 
-    // If the next deck is empty, load the next song from queue.
+    // Load the next queued song if the target deck is empty.
     if (_nameFor(targetDeck) == null) {
       if (queue.isEmpty) {
         return;
@@ -198,6 +198,10 @@ class _DJScreenState extends State<DJScreen> {
         targetDeck,
         nextTrack.name,
       );
+
+      if (mounted) {
+        setState(() {});
+      }
     }
 
     if (mounted) {
@@ -206,7 +210,7 @@ class _DJScreenState extends State<DJScreen> {
       });
     }
 
-    // Target starts completely silent.
+    // Target deck starts completely silent.
     await targetPlayer.setVolume(0.0);
 
     // Start target deck.
@@ -214,7 +218,7 @@ class _DJScreenState extends State<DJScreen> {
       await targetPlayer.play();
     }
 
-    // 10-second crossfade.
+    // Exactly 10 seconds.
     const int steps = 100;
 
     for (int i = 0; i <= steps; i++) {
@@ -251,18 +255,17 @@ class _DJScreenState extends State<DJScreen> {
       );
     }
 
-    // Source is now finished.
+    // Stop the old deck.
     await sourcePlayer.stop();
 
     await sourcePlayer.setVolume(0.0);
 
     await targetPlayer.setVolume(1.0);
 
-    // Target becomes the live deck.
+    // Target becomes the active deck.
     activeDeck = targetDeck;
 
-    crossfade =
-        activeDeck == Deck.a ? 0.0 : 1.0;
+    crossfade = activeDeck == Deck.a ? 0.0 : 1.0;
 
     if (mounted) {
       setState(() {
@@ -395,4 +398,158 @@ class _DJScreenState extends State<DJScreen> {
 
     Deck targetDeck;
 
-    if (_isPlaying
+    // If the active deck is playing,
+    // load the queued song into the other deck.
+    if (_isPlaying(activeDeck)) {
+      targetDeck = _otherDeck(activeDeck);
+    } else if (_nameFor(activeDeck) == null) {
+      targetDeck = activeDeck;
+    } else {
+      targetDeck = _otherDeck(activeDeck);
+    }
+
+    await _loadTrackIntoDeck(
+      targetDeck,
+      track,
+      autoPlay: false,
+    );
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  // ============================================================
+  // MANUAL CROSSFADER
+  // ============================================================
+
+  Future<void> _handleCrossfade(
+    double value,
+  ) async {
+    if (isCrossfading) {
+      return;
+    }
+
+    // Moving toward B starts B.
+    if (value > 0.01 &&
+        _nameFor(Deck.b) != null &&
+        !playerB.playing) {
+      await playerB.setVolume(0.0);
+      await playerB.play();
+    }
+
+    // Moving toward A starts A.
+    if (value < 0.99 &&
+        _nameFor(Deck.a) != null &&
+        !playerA.playing) {
+      await playerA.setVolume(0.0);
+      await playerA.play();
+    }
+
+    // Set A volume.
+    await playerA.setVolume(
+      1.0 - value,
+    );
+
+    // Set B volume.
+    await playerB.setVolume(
+      value,
+    );
+
+    // Determine active deck.
+    if (value >= 0.5 &&
+        _nameFor(Deck.b) != null) {
+      activeDeck = Deck.b;
+    } else if (value < 0.5 &&
+        _nameFor(Deck.a) != null) {
+      activeDeck = Deck.a;
+    }
+
+    if (mounted) {
+      setState(() {
+        crossfade = value;
+      });
+    }
+  }
+
+  // ============================================================
+  // PLAY / PAUSE
+  // ============================================================
+
+  Future<void> togglePlay(
+    Deck deck,
+  ) async {
+    final player = _playerFor(deck);
+
+    if (player.playing) {
+      await player.pause();
+      return;
+    }
+
+    if (_nameFor(deck) == null) {
+      return;
+    }
+
+    final otherDeck = _otherDeck(deck);
+    final otherPlayer = _playerFor(otherDeck);
+
+    // If the other deck is playing,
+    // start this deck silently.
+    if (otherPlayer.playing) {
+      await player.setVolume(0.0);
+      await player.play();
+
+      if (mounted) {
+        setState(() {});
+      }
+
+      return;
+    }
+
+    activeDeck = deck;
+
+    await player.setVolume(1.0);
+
+    await otherPlayer.setVolume(0.0);
+
+    crossfade = deck == Deck.a ? 0.0 : 1.0;
+
+    await player.play();
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  // ============================================================
+  // STOP
+  // ============================================================
+
+  Future<void> stopDeck(
+    Deck deck,
+  ) async {
+    final player = _playerFor(deck);
+
+    await player.stop();
+
+    await player.setVolume(0.0);
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  // ============================================================
+  // DECK UI
+  // ============================================================
+
+  Widget deckWidget(
+    bool isA,
+  ) {
+    final deck = isA ? Deck.a : Deck.b;
+
+    final player = _playerFor(deck);
+
+    final name = _nameFor(deck);
+
+    final isActive = activeDeck
