@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
@@ -10,7 +9,6 @@ void main() {
 
 class BlendJamApp extends StatelessWidget {
   const BlendJamApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -54,21 +52,15 @@ class _DJScreenState extends State<DJScreen> {
   @override
   void initState() {
     super.initState();
-    positionASub = playerA.positionStream.listen((position) {
-      _checkAutoMix(Deck.a, position);
-    });
-    positionBSub = playerB.positionStream.listen((position) {
-      _checkAutoMix(Deck.b, position);
-    });
+    positionASub = playerA.positionStream.listen((p) => _checkAutoMix(Deck.a, p));
+    positionBSub = playerB.positionStream.listen((p) => _checkAutoMix(Deck.b, p));
   }
 
-  AudioPlayer _playerFor(Deck deck) => deck == Deck.a? playerA : playerB;
-  Deck _otherDeck(Deck deck) => deck == Deck.a? Deck.b : Deck.a;
-  String? _nameFor(Deck deck) => deck == Deck.a? nameA : nameB;
-  void _setName(Deck deck, String? name) {
-    if (deck == Deck.a) { nameA = name; } else { nameB = name; }
-  }
-  bool _isPlaying(Deck deck) => _playerFor(deck).playing;
+  AudioPlayer _playerFor(Deck d) => d == Deck.a ? playerA : playerB;
+  Deck _otherDeck(Deck d) => d == Deck.a ? Deck.b : Deck.a;
+  String? _nameFor(Deck d) => d == Deck.a ? nameA : nameB;
+  void _setName(Deck d, String? n) { if (d == Deck.a) nameA = n; else nameB = n; }
+  bool _isPlaying(Deck d) => _playerFor(d).playing;
 
   @override
   void dispose() {
@@ -79,13 +71,14 @@ class _DJScreenState extends State<DJScreen> {
     super.dispose();
   }
 
+  // === FIXED AUTO MIX ===
   void _checkAutoMix(Deck deck, Duration position) {
-    if (!autoMix || isCrossfading || deck!= activeDeck) return;
+    if (!autoMix || isCrossfading || deck != activeDeck) return;
     final player = _playerFor(deck);
     final duration = player.duration;
-    if (duration == null) return;
+    if (duration == null || !player.playing) return;
     final remaining = duration - position;
-    if (remaining <= const Duration(seconds: 10) && remaining > Duration.zero && position > const Duration(seconds: 1)) {
+    if (remaining <= const Duration(seconds: 10) && remaining > Duration.zero && position > const Duration(seconds: 2)) {
       _triggerAutoMix();
     }
   }
@@ -97,250 +90,14 @@ class _DJScreenState extends State<DJScreen> {
     final sourcePlayer = _playerFor(sourceDeck);
     final targetPlayer = _playerFor(targetDeck);
 
-    if (_nameFor(targetDeck) == null) {
-      if (queue.isEmpty) return;
+    // Always use QUEUE first if available
+    if (queue.isNotEmpty) {
       final nextTrack = queue.removeAt(0);
       await targetPlayer.stop();
       await targetPlayer.setFilePath(nextTrack.path);
-      await targetPlayer.seek(const Duration(milliseconds: 350));
+      await targetPlayer.seek(Duration.zero);
       _setName(targetDeck, nextTrack.name);
       if (mounted) setState(() {});
     }
 
-    if (mounted) setState(() { isCrossfading = true; });
-    await targetPlayer.setVolume(0.0);
-    if (!targetPlayer.playing) await targetPlayer.play();
-
-    const int steps = 100;
-    const Duration stepDuration = Duration(milliseconds: 100);
-    for (int step = 1; step <= steps; step++) {
-      final value = step / steps;
-      if (sourceDeck == Deck.a) {
-        crossfade = value;
-        await sourcePlayer.setVolume(1.0 - value);
-        await targetPlayer.setVolume(value);
-      } else {
-        crossfade = 1.0 - value;
-        await sourcePlayer.setVolume(value);
-        await targetPlayer.setVolume(1.0 - value);
-      }
-      if (mounted) setState(() {});
-      if (step < steps) await Future.delayed(stepDuration);
-    }
-
-    if (sourceDeck == Deck.a) {
-      crossfade = 1.0;
-      await sourcePlayer.setVolume(0.0);
-      await targetPlayer.setVolume(1.0);
-    } else {
-      crossfade = 0.0;
-      await sourcePlayer.setVolume(0.0);
-      await targetPlayer.setVolume(1.0);
-    }
-    await sourcePlayer.stop();
-    activeDeck = targetDeck;
-    crossfade = activeDeck == Deck.a? 0.0 : 1.0;
-    if (mounted) setState(() { isCrossfading = false; });
-  }
-
-  Future<void> pickTrack(bool requestedIsA) async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.audio);
-    if (result == null || result.files.single.path == null) return;
-    final requestedDeck = requestedIsA? Deck.a : Deck.b;
-    Deck targetDeck = requestedDeck;
-    if (_isPlaying(activeDeck) && requestedDeck == activeDeck) {
-      targetDeck = _otherDeck(activeDeck);
-    }
-    final track = QueuedTrack(result.files.single.path!, result.files.single.name);
-    await _loadTrackIntoDeck(targetDeck, track, autoPlay: false);
-  }
-
-  Future<void> _loadTrackIntoDeck(Deck deck, QueuedTrack track, {required bool autoPlay}) async {
-    final player = _playerFor(deck);
-    await player.stop();
-    await player.setFilePath(track.path);
-    await player.seek(const Duration(milliseconds: 350));
-    _setName(deck, track.name);
-    await player.setVolume(deck == activeDeck? 1.0 : 0.0);
-    if (autoPlay) await player.play();
-    if (mounted) setState(() {});
-  }
-
-  Future<void> addToQueue() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.audio, allowMultiple: true);
-    if (result == null) return;
-    final tracks = result.files.where((file) => file.path!= null).map((file) => QueuedTrack(file.path!, file.name)).toList();
-    if (mounted) setState(() { queue.addAll(tracks); });
-  }
-
-  Future<void> playFromQueue(int index) async {
-    if (index < 0 || index >= queue.length) return;
-    final track = queue.removeAt(index);
-    Deck targetDeck;
-    if (_isPlaying(activeDeck)) {
-      targetDeck = _otherDeck(activeDeck);
-    } else if (_nameFor(activeDeck) == null) {
-      targetDeck = activeDeck;
-    } else {
-      targetDeck = _otherDeck(activeDeck);
-    }
-    await _loadTrackIntoDeck(targetDeck, track, autoPlay: false);
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _handleCrossfade(double value) async {
-    if (isCrossfading) return;
-    if (value > 0.01 && _nameFor(Deck.b)!= null &&!playerB.playing) {
-      await playerB.setVolume(0.0);
-      await playerB.play();
-    }
-    if (value < 0.99 && _nameFor(Deck.a)!= null &&!playerA.playing) {
-      await playerA.setVolume(0.0);
-      await playerA.play();
-    }
-    await playerA.setVolume(1.0 - value);
-    await playerB.setVolume(value);
-    if (value >= 0.5 && _nameFor(Deck.b)!= null) {
-      activeDeck = Deck.b;
-    } else if (value < 0.5 && _nameFor(Deck.a)!= null) {
-      activeDeck = Deck.a;
-    }
-    if (mounted) setState(() { crossfade = value; });
-  }
-
-  Future<void> togglePlay(Deck deck) async {
-    final player = _playerFor(deck);
-    if (player.playing) { await player.pause(); return; }
-    if (_nameFor(deck) == null) return;
-    final otherDeck = _otherDeck(deck);
-    final otherPlayer = _playerFor(otherDeck);
-    if (otherPlayer.playing) {
-      await player.setVolume(0.0);
-      await player.play();
-      if (mounted) setState(() {});
-      return;
-    }
-    activeDeck = deck;
-    await player.setVolume(1.0);
-    await otherPlayer.setVolume(0.0);
-    crossfade = deck == Deck.a? 0.0 : 1.0;
-    await player.play();
-    if (mounted) setState(() {});
-  }
-
-  Future<void> stopDeck(Deck deck) async {
-    final player = _playerFor(deck);
-    await player.stop();
-    await player.setVolume(0.0);
-    if (mounted) setState(() {});
-  }
-
-  Widget deckWidget(bool isA) {
-    final deck = isA? Deck.a : Deck.b;
-    final player = _playerFor(deck);
-    final name = _nameFor(deck);
-    final isActive = activeDeck == deck;
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          children: [
-            Text('DECK ${isA? 'A' : 'B'} ${isActive? '(LIVE)' : '(NEXT)'}',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: isActive? const Color(0xFFCEBBFF) : Colors.white70)),
-            const SizedBox(height: 4),
-            Text(name?? 'No track', style: const TextStyle(color: Colors.white70, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              IconButton(icon: const Icon(Icons.folder_open), onPressed: () => pickTrack(isA)),
-              StreamBuilder<PlayerState>(stream: player.playerStateStream, builder: (context, snapshot) {
-                final playing = snapshot.data?.playing?? false;
-                return IconButton(iconSize: 36, icon: Icon(playing? Icons.pause_circle_filled : Icons.play_circle_fill, color: const Color(0xFFCEBBFF)), onPressed: () => togglePlay(deck));
-              }),
-              IconButton(icon: const Icon(Icons.stop), onPressed: () => stopDeck(deck)),
-            ]),
-            StreamBuilder<Duration>(stream: player.positionStream, builder: (context, snapshot) {
-              final position = snapshot.data?? Duration.zero;
-              final duration = player.duration?? Duration.zero;
-              final max = duration.inMilliseconds > 0? duration.inMilliseconds.toDouble() : 1.0;
-              final value = position.inMilliseconds.toDouble().clamp(0.0, max);
-              return Column(children: [
-                Slider(value: value, min: 0.0, max: max, activeColor: const Color(0xFFCEBBFF), onChanged: (newPosition) => player.seek(Duration(milliseconds: newPosition.toInt()))),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  Text(_formatDuration(position), style: const TextStyle(fontSize: 10)),
-                  Text(_formatDuration(duration), style: const TextStyle(fontSize: 10)),
-                ]),
-              ]);
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('BlendJam'),
-        actions: [
-          Row(children: [
-            const Text('AUTO MIX', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-            Switch(value: autoMix, activeColor: const Color(0xFFCEBBFF), onChanged: (value) => setState(() => autoMix = value)),
-            const SizedBox(width: 8),
-          ]),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: [
-          deckWidget(true),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Column(children: [
-              Row(children: [
-                const Text('A', style: TextStyle(fontSize: 10)),
-                Expanded(child: Slider(value: crossfade, min: 0.0, max: 1.0, onChanged: _handleCrossfade)),
-                const Text('B', style: TextStyle(fontSize: 10)),
-              ]),
-              if (autoMix) const Text('Auto Mix: transition starts during the final 10 seconds.', textAlign: TextAlign.center, style: TextStyle(fontSize: 9, color: Colors.white54)),
-              if (isCrossfading) const LinearProgressIndicator(color: Color(0xFFCEBBFF)),
-            ]),
-          ),
-          deckWidget(false),
-          const SizedBox(height: 16),
-          // QUEUE HEADER - FIXED HERE
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('QUEUE (${queue.length}) - Tap to load',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-              IconButton(icon: const Icon(Icons.add), onPressed: addToQueue),
-            ],
-          ),
-          if (queue.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('Queue is empty. Tap + to add tracks.', style: TextStyle(color: Colors.white54, fontSize: 11), textAlign: TextAlign.center),
-            )
-          else
-           ...List.generate(queue.length, (index) {
-              final track = queue[index];
-              return ListTile(
-                dense: true,
-                title: Text(track.name, style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
-                trailing: IconButton(icon: const Icon(Icons.close, size: 16), onPressed: () => setState(() => queue.removeAt(index))),
-                onTap: () => playFromQueue(index),
-              );
-            }),
-          const SizedBox(height: 80),
-        ],
-      ),
-    );
-  }
-}
+    if (_nameFor(targetDeck) == null)
