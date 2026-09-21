@@ -75,6 +75,10 @@ class _DJScreenState extends State<DJScreen> {
     );
   }
 
+  // ============================================================
+  // DECK HELPERS
+  // ============================================================
+
   AudioPlayer _playerFor(Deck deck) {
     return deck == Deck.a ? playerA : playerB;
   }
@@ -99,6 +103,10 @@ class _DJScreenState extends State<DJScreen> {
     return _playerFor(deck).playing;
   }
 
+  // ============================================================
+  // DISPOSE
+  // ============================================================
+
   @override
   void dispose() {
     positionASub?.cancel();
@@ -116,8 +124,10 @@ class _DJScreenState extends State<DJScreen> {
 
   void _checkAutoMix(Deck deck, Duration position) {
     if (!autoMix) return;
+
     if (isCrossfading) return;
-    if (queue.isEmpty) return;
+
+    // Only the LIVE deck controls Auto Mix.
     if (deck != activeDeck) return;
 
     final player = _playerFor(deck);
@@ -127,6 +137,7 @@ class _DJScreenState extends State<DJScreen> {
 
     final remaining = duration - position;
 
+    // Start the transition during the final 10 seconds.
     if (remaining <= const Duration(seconds: 10) &&
         remaining > Duration.zero &&
         position > const Duration(seconds: 1)) {
@@ -169,7 +180,7 @@ class _DJScreenState extends State<DJScreen> {
   }
 
   // ============================================================
-  // LOAD TRACK
+  // LOAD TRACK INTO DECK
   // ============================================================
 
   Future<void> _loadTrackIntoDeck(
@@ -183,13 +194,15 @@ class _DJScreenState extends State<DJScreen> {
 
     await player.setFilePath(track.path);
 
-    // Small leading-silence trim.
+    // Small leading silence trim.
     await player.seek(
       const Duration(milliseconds: 350),
     );
 
     _setName(deck, track.name);
 
+    // LIVE deck gets full volume.
+    // NEXT deck starts silent.
     if (deck == activeDeck) {
       await player.setVolume(1.0);
     } else {
@@ -273,9 +286,7 @@ class _DJScreenState extends State<DJScreen> {
   // ============================================================
 
   Future<void> _triggerAutoMix() async {
-    if (queue.isEmpty || isCrossfading) {
-      return;
-    }
+    if (isCrossfading) return;
 
     final sourceDeck = activeDeck;
     final targetDeck = _otherDeck(sourceDeck);
@@ -283,7 +294,30 @@ class _DJScreenState extends State<DJScreen> {
     final sourcePlayer = _playerFor(sourceDeck);
     final targetPlayer = _playerFor(targetDeck);
 
-    final next = queue.removeAt(0);
+    /*
+     * IMPORTANT:
+     *
+     * First use a song that is already loaded in the free deck.
+     *
+     * If the free deck is empty, take the next song from the queue.
+     */
+    if (_nameFor(targetDeck) == null) {
+      if (queue.isEmpty) {
+        return;
+      }
+
+      final next = queue.removeAt(0);
+
+      await targetPlayer.stop();
+
+      await targetPlayer.setFilePath(next.path);
+
+      await targetPlayer.seek(
+        const Duration(milliseconds: 350),
+      );
+
+      _setName(targetDeck, next.name);
+    }
 
     if (mounted) {
       setState(() {
@@ -291,30 +325,31 @@ class _DJScreenState extends State<DJScreen> {
       });
     }
 
-    // Prepare the free deck.
-    await targetPlayer.stop();
+    // ------------------------------------------------------------
+    // START NEXT DECK SILENTLY
+    // ------------------------------------------------------------
 
-    await targetPlayer.setFilePath(next.path);
-
-    // Trim small amount of leading silence.
-    await targetPlayer.seek(
-      const Duration(milliseconds: 350),
-    );
-
-    _setName(targetDeck, next.name);
-
-    // Start the new track silently.
     await targetPlayer.setVolume(0.0);
 
-    await targetPlayer.play();
+    if (!targetPlayer.playing) {
+      await targetPlayer.play();
+    }
 
-    // 10-second crossfade.
+    // ------------------------------------------------------------
+    // 10 SECOND CROSSFADE
+    // ------------------------------------------------------------
+
     const int steps = 100;
 
     for (int i = 0; i <= steps; i++) {
+      if (!isCrossfading) {
+        break;
+      }
+
       final value = i / steps;
 
       if (sourceDeck == Deck.a) {
+        // A -> B
         crossfade = value;
 
         await sourcePlayer.setVolume(
@@ -325,6 +360,7 @@ class _DJScreenState extends State<DJScreen> {
           value,
         );
       } else {
+        // B -> A
         crossfade = 1.0 - value;
 
         await sourcePlayer.setVolume(
@@ -345,11 +381,15 @@ class _DJScreenState extends State<DJScreen> {
       );
     }
 
-    // Stop old deck.
+    // ------------------------------------------------------------
+    // FINISH TRANSITION
+    // ------------------------------------------------------------
+
     await sourcePlayer.stop();
     await sourcePlayer.setVolume(0.0);
 
-    // New deck becomes active.
+    await targetPlayer.setVolume(1.0);
+
     activeDeck = targetDeck;
 
     crossfade = activeDeck == Deck.a ? 0.0 : 1.0;
@@ -362,28 +402,103 @@ class _DJScreenState extends State<DJScreen> {
   }
 
   // ============================================================
+  // MANUAL CROSSFADE
+  // ============================================================
+
+  Future<void> _handleCrossfade(double value) async {
+    if (isCrossfading) {
+      return;
+    }
+
+    // ------------------------------------------------------------
+    // A -> B
+    // ------------------------------------------------------------
+
+    if (value > 0.01 &&
+        _nameFor(Deck.b) != null &&
+        !playerB.playing) {
+      await playerB.setVolume(0.0);
+      await playerB.play();
+    }
+
+    // ------------------------------------------------------------
+    // B -> A
+    // ------------------------------------------------------------
+
+    if (value < 0.99 &&
+        _nameFor(Deck.a) != null &&
+        !playerA.playing) {
+      await playerA.setVolume(0.0);
+      await playerA.play();
+    }
+
+    // ------------------------------------------------------------
+    // APPLY VOLUME
+    // ------------------------------------------------------------
+
+    await playerA.setVolume(1.0 - value);
+    await playerB.setVolume(value);
+
+    // ------------------------------------------------------------
+    // DETERMINE LIVE DECK
+    // ------------------------------------------------------------
+
+    if (value >= 0.5 && _nameFor(Deck.b) != null) {
+      activeDeck = Deck.b;
+    } else if (value < 0.5 && _nameFor(Deck.a) != null) {
+      activeDeck = Deck.a;
+    }
+
+    if (mounted) {
+      setState(() {
+        crossfade = value;
+      });
+    }
+  }
+
+  // ============================================================
   // PLAY / PAUSE
   // ============================================================
 
   Future<void> togglePlay(Deck deck) async {
     final player = _playerFor(deck);
 
+    // Pause if already playing.
     if (player.playing) {
       await player.pause();
       return;
     }
 
+    // Nothing loaded.
     if (_nameFor(deck) == null) {
       return;
     }
 
-    activeDeck = deck;
-
+    // If another deck is playing, prepare this deck as the
+    // NEXT deck. The crossfader can then bring it in.
     final otherDeck = _otherDeck(deck);
     final otherPlayer = _playerFor(otherDeck);
 
+    if (otherPlayer.playing && otherDeck != deck) {
+      activeDeck = otherDeck;
+
+      await player.setVolume(0.0);
+
+      await player.play();
+
+      if (mounted) {
+        setState(() {});
+      }
+
+      return;
+    }
+
+    // No other deck is playing.
+    activeDeck = deck;
+
     await player.setVolume(1.0);
-    await otherPlayer.setVolume(0.0);
+
+    await _playerFor(_otherDeck(deck)).setVolume(0.0);
 
     crossfade = deck == Deck.a ? 0.0 : 1.0;
 
@@ -395,7 +510,7 @@ class _DJScreenState extends State<DJScreen> {
   }
 
   // ============================================================
-  // STOP
+  // STOP DECK
   // ============================================================
 
   Future<void> stopDeck(Deck deck) async {
@@ -545,6 +660,10 @@ class _DJScreenState extends State<DJScreen> {
     );
   }
 
+  // ============================================================
+  // TIME FORMAT
+  // ============================================================
+
   String _formatDuration(Duration duration) {
     final minutes = duration.inMinutes
         .remainder(60)
@@ -617,19 +736,7 @@ class _DJScreenState extends State<DJScreen> {
                         value: crossfade,
                         min: 0.0,
                         max: 1.0,
-                        onChanged: (value) {
-                          setState(() {
-                            crossfade = value;
-                          });
-
-                          playerA.setVolume(
-                            1.0 - value,
-                          );
-
-                          playerB.setVolume(
-                            value,
-                          );
-                        },
+                        onChanged: _handleCrossfade,
                       ),
                     ),
 
@@ -642,7 +749,7 @@ class _DJScreenState extends State<DJScreen> {
 
                 if (autoMix)
                   const Text(
-                    'Auto Mix: next track loads into the free deck during the final 10 seconds.',
+                    'Auto Mix: transition starts during the final 10 seconds.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 9,
@@ -699,57 +806,4 @@ class _DJScreenState extends State<DJScreen> {
                     track.name,
                     style:
                         const TextStyle(fontSize: 12),
-                    maxLines: 1,
-                    overflow:
-                        TextOverflow.ellipsis,
-                  ),
-
-                  leading: Text(
-                    '${index + 1}',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: Colors.white54,
-                    ),
-                  ),
-
-                  trailing: IconButton(
-                    icon: const Icon(
-                      Icons.close,
-                      size: 16,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        queue.removeAt(index);
-                      });
-                    },
-                  ),
-
-                  onTap: () {
-                    playFromQueue(index);
-                  },
-                ),
-              );
-            },
-          ),
-
-          const SizedBox(height: 8),
-
-          FilledButton.icon(
-            onPressed: addToQueue,
-            icon: const Icon(Icons.add),
-            label: Text(
-              'Add songs (${queue.length})',
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor:
-                  const Color(0xFFCEBBFF),
-              foregroundColor: Colors.black,
-            ),
-          ),
-
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-}
+              
