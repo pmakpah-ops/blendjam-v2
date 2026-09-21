@@ -158,7 +158,7 @@ class _DJScreenState extends State<DJScreen> {
 
     Deck targetDeck = requestedDeck;
 
-    // Do not replace the currently playing deck.
+    // Never replace the currently playing deck.
     if (_isPlaying(activeDeck) && requestedDeck == activeDeck) {
       targetDeck = _otherDeck(activeDeck);
     }
@@ -190,6 +190,7 @@ class _DJScreenState extends State<DJScreen> {
 
     await player.setFilePath(track.path);
 
+    // Small leading silence trim.
     await player.seek(
       const Duration(milliseconds: 350),
     );
@@ -212,7 +213,7 @@ class _DJScreenState extends State<DJScreen> {
   }
 
   // ============================================================
-  // QUEUE
+  // ADD SONGS TO QUEUE
   // ============================================================
 
   Future<void> addToQueue() async {
@@ -289,8 +290,8 @@ class _DJScreenState extends State<DJScreen> {
     // GET NEXT TRACK
     // ----------------------------------------------------------
     //
-    // First use a song already loaded in the free deck.
-    // Otherwise take the first song from the queue.
+    // First use a track already loaded in the free deck.
+    // Otherwise take the first track from the queue.
     //
 
     if (_nameFor(targetDeck) == null) {
@@ -414,8 +415,387 @@ class _DJScreenState extends State<DJScreen> {
       await playerA.play();
     }
 
-    // Apply fader volumes.
+    // Apply crossfader volumes.
     await playerA.setVolume(1.0 - value);
     await playerB.setVolume(value);
 
-    // Determine which
+    // Determine the live deck.
+    if (value >= 0.5 && _nameFor(Deck.b) != null) {
+      activeDeck = Deck.b;
+    } else if (value < 0.5 && _nameFor(Deck.a) != null) {
+      activeDeck = Deck.a;
+    }
+
+    if (mounted) {
+      setState(() {
+        crossfade = value;
+      });
+    }
+  }
+
+  // ============================================================
+  // PLAY / PAUSE
+  // ============================================================
+
+  Future<void> togglePlay(Deck deck) async {
+    final player = _playerFor(deck);
+
+    if (player.playing) {
+      await player.pause();
+      return;
+    }
+
+    if (_nameFor(deck) == null) {
+      return;
+    }
+
+    final otherDeck = _otherDeck(deck);
+    final otherPlayer = _playerFor(otherDeck);
+
+    // If the other deck is playing, start this deck silently.
+    if (otherPlayer.playing) {
+      await player.setVolume(0.0);
+      await player.play();
+
+      if (mounted) {
+        setState(() {});
+      }
+
+      return;
+    }
+
+    // No other deck is playing.
+    activeDeck = deck;
+
+    await player.setVolume(1.0);
+    await otherPlayer.setVolume(0.0);
+
+    crossfade = deck == Deck.a ? 0.0 : 1.0;
+
+    await player.play();
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  // ============================================================
+  // STOP
+  // ============================================================
+
+  Future<void> stopDeck(Deck deck) async {
+    final player = _playerFor(deck);
+
+    await player.stop();
+    await player.setVolume(0.0);
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  // ============================================================
+  // DECK UI
+  // ============================================================
+
+  Widget deckWidget(bool isA) {
+    final deck = isA ? Deck.a : Deck.b;
+    final player = _playerFor(deck);
+    final name = _nameFor(deck);
+    final isActive = activeDeck == deck;
+
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          children: [
+            Text(
+              'DECK ${isA ? 'A' : 'B'} '
+              '${isActive ? '(LIVE)' : '(NEXT)'}',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: isActive
+                    ? const Color(0xFFCEBBFF)
+                    : Colors.white70,
+              ),
+            ),
+
+            const SizedBox(height: 4),
+
+            Text(
+              name ?? 'No track',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.folder_open),
+                  onPressed: () => pickTrack(isA),
+                ),
+
+                StreamBuilder<PlayerState>(
+                  stream: player.playerStateStream,
+                  builder: (context, snapshot) {
+                    final playing =
+                        snapshot.data?.playing ?? false;
+
+                    return IconButton(
+                      iconSize: 36,
+                      icon: Icon(
+                        playing
+                            ? Icons.pause_circle_filled
+                            : Icons.play_circle_fill,
+                        color: const Color(0xFFCEBBFF),
+                      ),
+                      onPressed: () => togglePlay(deck),
+                    );
+                  },
+                ),
+
+                IconButton(
+                  icon: const Icon(Icons.stop),
+                  onPressed: () => stopDeck(deck),
+                ),
+              ],
+            ),
+
+            StreamBuilder<Duration>(
+              stream: player.positionStream,
+              builder: (context, snapshot) {
+                final position =
+                    snapshot.data ?? Duration.zero;
+
+                final duration =
+                    player.duration ?? Duration.zero;
+
+                final max = duration.inMilliseconds > 0
+                    ? duration.inMilliseconds.toDouble()
+                    : 1.0;
+
+                final value = position.inMilliseconds
+                    .toDouble()
+                    .clamp(0.0, max);
+
+                return Column(
+                  children: [
+                    Slider(
+                      value: value,
+                      min: 0.0,
+                      max: max,
+                      activeColor:
+                          const Color(0xFFCEBBFF),
+                      onChanged: (newPosition) {
+                        player.seek(
+                          Duration(
+                            milliseconds:
+                                newPosition.toInt(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    Row(
+                      mainAxisAlignment:
+                          MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _formatDuration(position),
+                          style:
+                              const TextStyle(fontSize: 10),
+                        ),
+
+                        Text(
+                          _formatDuration(duration),
+                          style:
+                              const TextStyle(fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // FORMAT TIME
+  // ============================================================
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes
+        .remainder(60)
+        .toString()
+        .padLeft(2, '0');
+
+    final seconds = duration.inSeconds
+        .remainder(60)
+        .toString()
+        .padLeft(2, '0');
+
+    return '$minutes:$seconds';
+  }
+
+  // ============================================================
+  // MAIN SCREEN
+  // ============================================================
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('BlendJam'),
+        actions: [
+          Row(
+            children: [
+              const Text(
+                'AUTO MIX',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              Switch(
+                value: autoMix,
+                activeColor: const Color(0xFFCEBBFF),
+                onChanged: (value) {
+                  setState(() {
+                    autoMix = value;
+                  });
+                },
+              ),
+
+              const SizedBox(width: 8),
+            ],
+          ),
+        ],
+      ),
+
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          // ======================================================
+          // DECK A
+          // ======================================================
+
+          deckWidget(true),
+
+          // ======================================================
+          // CROSSFADER
+          // ======================================================
+
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'A',
+                      style: TextStyle(fontSize: 10),
+                    ),
+
+                    Expanded(
+                      child: Slider(
+                        value: crossfade,
+                        min: 0.0,
+                        max: 1.0,
+                        onChanged: _handleCrossfade,
+                      ),
+                    ),
+
+                    const Text(
+                      'B',
+                      style: TextStyle(fontSize: 10),
+                    ),
+                  ],
+                ),
+
+                if (autoMix)
+                  const Text(
+                    'Auto Mix: transition starts during the final 10 seconds.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: Colors.white54,
+                    ),
+                  ),
+
+                if (isCrossfading)
+                  const LinearProgressIndicator(
+                    color: Color(0xFFCEBBFF),
+                  ),
+              ],
+            ),
+          ),
+
+          // ======================================================
+          // DECK B
+          // ======================================================
+
+          deckWidget(false),
+
+          const SizedBox(height: 16),
+
+          // ======================================================
+          // QUEUE HEADER
+          // ======================================================
+
+          Row(
+            mainAxisAlignment:
+                MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'QUEUE (${queue.length}) - Tap to load',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+
+              IconButton(
+                icon: const Icon(Icons.clear_all),
+                onPressed: () {
+                  setState(() {
+                    queue.clear();
+                  });
+                },
+              ),
+            ],
+          ),
+
+          // ======================================================
+          // QUEUE ITEMS
+          // ======================================================
+
+          ...queue.asMap().entries.map(
+            (entry) {
+              final index = entry.key;
+              final track = entry.value;
+
+              return Card(
+                color: const Color(0xFF252525),
+                child: ListTile(
+                  dense: true,
+
+                  title: Text(
+                    track.name,
+                    style: const TextStyle(
+                      fontSize: 12,
+             
