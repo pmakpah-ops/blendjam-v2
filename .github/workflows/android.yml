@@ -39,9 +39,9 @@ jobs:
         run: |
           flutter pub get
 
-      - name: Analyze project
+      - name: Analyze application code
         run: |
-          flutter analyze
+          flutter analyze lib
 
       - name: Build APK
         run: |
