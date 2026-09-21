@@ -1,2 +1,48 @@
-flutter pub get
-flutter build apk --release --no-tree-shake-iconsor
+name: Build APK
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Flutter project
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+          cache: true
+
+      - name: Check Flutter installation
+        run: |
+          flutter --version
+          flutter doctor -v
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: |
+          flutter build apk \
+            --release \
+            --no-tree-shake-icons
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: blendjam-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
