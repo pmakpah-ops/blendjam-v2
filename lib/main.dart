@@ -17,7 +17,7 @@ class DJScreen extends StatefulWidget{const DJScreen({super.key});@override Stat
 class _DJScreenState extends State<DJScreen>{
   final a=AudioPlayer(),b=AudioPlayer();
   String? nA,nB; double xf=0; bool auto=false,xing=false; Deck live=Deck.a;
-  List<QueuedTrack> q=[]; int qPos=0;
+  List<QueuedTrack> q=[]; int qPos=0; bool hasPreloaded=false;
   StreamSubscription<Duration>? sA,sB; StreamSubscription<PlayerState>? stA,stB;
 
   AudioPlayer p(Deck d)=>d==Deck.a?a:b;
@@ -40,69 +40,81 @@ class _DJScreenState extends State<DJScreen>{
   }
 
   Future<void> _autoStartIfNeeded() async{
-    if(!auto) return;
-    if(p(live).playing) return;
-    if(q.isEmpty && nm(live)==null) return;
+    if(!auto || p(live).playing) return;
     if(nm(live)==null && q.isNotEmpty){
       final t=_nextFromQueue(); if(t!=null) await _load(live,t,play:true);
-    } else if(!p(live).playing){
-      await p(live).setVolume(1); xf=live==Deck.a?0:1; await p(live).play();
     }
-    await _preloadFree();
+    hasPreloaded=false; await _preloadFree();
   }
 
   Future<void> _preloadFree() async{
-    final free=o(live);
-    if(nm(free)!=null) return;
+    if(!auto) return;
+    if(hasPreloaded) return;
+    final free=o(live); if(nm(free)!=null) return;
     final t=_nextFromQueue(); if(t==null) return;
-    await _load(free,t,play:false);
+    await _load(free,t,play:false); hasPreloaded=true;
   }
 
   void _chk(Deck d,Duration pos){
-    final pl=p(d), dur=pl.duration; if(dur==null) return;
+    final pl=p(d), dur=pl.duration; if(dur==null || d!=live ||!pl.playing || xing) return;
     final rem=dur-pos;
-    // 15s: preload next song into free deck
-    if(d==live && pl.playing && rem <= const Duration(seconds:15) && rem > const Duration(seconds:11)){
-      _preloadFree();
-    }
-    // 10s: crossfade - works in AUTO and MANUAL if both decks loaded
-    final bothLoaded = nm(Deck.a)!=null && nm(Deck.b)!=null;
-    final shouldAutoX = auto || bothLoaded;
-    if(d==live && shouldAutoX &&!xing && rem <= const Duration(seconds:10) && rem > Duration.zero && pos > const Duration(seconds:2)){
-      _mix();
+
+    if(auto){
+      if(!hasPreloaded && rem <= const Duration(seconds:15) && rem > const Duration(seconds:10)){
+        _preloadFree();
+      }
+      if(rem <= const Duration(seconds:10) && rem > const Duration(milliseconds:500)){
+        _mix();
+      }
+    }else{
+      final both = nm(Deck.a)!=null && nm(Deck.b)!=null;
+      if(both && rem <= const Duration(seconds:10) && rem > const Duration(milliseconds:500)){
+        _mix();
+      }
     }
   }
 
   Future<void> _onEnd(Deck d) async{
     if(d!=live) return;
+    hasPreloaded=false;
     if(nm(o(d))!=null){ await _mix(force:true); return; }
-    if(q.isNotEmpty){ final t=_nextFromQueue(); if(t!=null){ await _load(o(d),t,play:false); await _mix(force:true); } }
+    if(auto && q.isNotEmpty){
+      final t=_nextFromQueue(); if(t!=null){ await _load(o(d),t,play:false); await _mix(force:true); }
+    }
   }
 
   Future<void> _mix({bool force=false}) async{
     if(xing) return;
     final src=live,tgt=o(src),srcP=p(src),tgtP=p(tgt);
+
     if(nm(tgt)==null){
-      final t=_nextFromQueue(); if(t==null) return; await _load(tgt,t,play:false);
+      if(auto){
+        final t=_nextFromQueue(); if(t==null) return; await _load(tgt,t,play:false);
+      }else{ return; }
     }
+
     setState(()=>xing=true);
-    await tgtP.setVolume(0); if(!tgtP.playing) await tgtP.play();
-    for(var i=1;i<=100;i++){
-      final v=i/100; xf=src==Deck.a?v:1-v;
+    await tgtP.setVolume(0);
+    if(!tgtP.playing){ await tgtP.play(); }
+
+    // FIX: 5 sec fade, not 10 sec - so old song doesn't end mid-fade
+    for(var i=1;i<=60;i++){
+      final v=i/60; xf=src==Deck.a?v:1-v;
       await srcP.setVolume(src==Deck.a?1-v:v);
       await tgtP.setVolume(src==Deck.a?v:1-v);
       if(mounted) setState((){});
-      await Future.delayed(const Duration(milliseconds:100));
+      await Future.delayed(const Duration(milliseconds:80));
     }
-    xf=src==Deck.a?1:0; await srcP.setVolume(0); await tgtP.setVolume(1); await srcP.stop(); setNm(src,null);
-    live=tgt; setState(()=>xing=false);
-    if(q.isNotEmpty) await _preloadFree();
+
+    xf=src==Deck.a?1:0; await srcP.setVolume(0); await tgtP.setVolume(1);
+    await srcP.stop(); setNm(src,null); live=tgt; hasPreloaded=false;
+    setState(()=>xing=false);
+    if(auto) await _preloadFree();
   }
 
   Future<void> _load(Deck d,QueuedTrack t,{bool play=false}) async{
     final pl=p(d); await pl.stop(); await pl.setFilePath(t.path);
-    // trim empty start - start at 350ms to skip silence
-    await pl.seek(const Duration(milliseconds:350));
+    await pl.seek(const Duration(milliseconds:250));
     setNm(d,t.name); await pl.setVolume(d==live?1:0);
     if(play){ live=d; xf=d==Deck.a?0:1; await pl.setVolume(1); await pl.play(); }
     if(mounted) setState((){});
@@ -131,7 +143,7 @@ class _DJScreenState extends State<DJScreen>{
   Future<void> _toggle(Deck d) async{
     final pl=p(d); if(pl.playing){await pl.pause();return;}
     if(nm(d)==null){
-      if(q.isNotEmpty){ final t=_nextFromQueue(); if(t!=null) await _load(d,t,play:true); }
+      if(auto && q.isNotEmpty){ final t=_nextFromQueue(); if(t!=null) await _load(d,t,play:true); }
       return;
     }
     final op=p(o(d));
@@ -158,14 +170,18 @@ class _DJScreenState extends State<DJScreen>{
   }
 
   @override Widget build(BuildContext c)=>Scaffold(
-    appBar:AppBar(title:const Text('BlendJam'),actions:[Row(children:[const Text('AUTO MIX',style:TextStyle(fontSize:10,fontWeight:FontWeight.bold)),Switch(value:auto,activeColor:const Color(0xFFCEBBFF),onChanged:(v)async{setState(()=>auto=v); if(v) await _autoStartIfNeeded();}),const SizedBox(width:8)])]),
+    appBar:AppBar(title:const Text('BlendJam'),actions:[Row(children:[const Text('AUTO MIX',style:TextStyle(fontSize:10,fontWeight:FontWeight.bold)),Switch(value:auto,activeColor:const Color(0xFFCEBBFF),onChanged:(v)async{setState(()=>auto=v); hasPreloaded=false; if(v) await _autoStartIfNeeded();}),const SizedBox(width:8)])]),
     body:ListView(padding:const EdgeInsets.all(12),children:[
       deck(true),
-      Column(children:[Row(children:[const Text('A',style:TextStyle(fontSize:10)),Expanded(child:Slider(value:xf,min:0,max:1,onChanged:_xfAct)),const Text('B',style:TextStyle(fontSize:10))]),if(auto) const Text('15s: preload | 10s: crossfade | loops',textAlign:TextAlign.center,style:TextStyle(fontSize:9,color:Colors.white54)),if(xing) const LinearProgressIndicator(color:Color(0xFFCEBBFF))]),
+      Column(children:[Row(children:[const Text('A',style:TextStyle(fontSize:10)),Expanded(child:Slider(value:xf,min:0,max:1,onChanged:_xfAct)),const Text('B',style:TextStyle(fontSize:10))]),if(auto) const Text('AUTO: 15s preload | 10s->5s fade | loops',textAlign:TextAlign.center,style:TextStyle(fontSize:9,color:Colors.white54)) else const Text('MANUAL: tap queue to load free deck, 10s xfade',textAlign:TextAlign.center,style:TextStyle(fontSize:9,color:Colors.white54)),if(xing) const LinearProgressIndicator(color:Color(0xFFCEBBFF))]),
       deck(false),const SizedBox(height:16),
-      Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text('QUEUE (${q.length}) loops',style:const TextStyle(fontWeight:FontWeight.bold,fontSize:12)),IconButton(icon:const Icon(Icons.add),onPressed:addQ)]),
+      Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text('QUEUE (${q.length}) ${auto?'loops':'(tap to load in MANUAL too)'}',style:const TextStyle(fontWeight:FontWeight.bold,fontSize:12)),IconButton(icon:const Icon(Icons.add),onPressed:addQ)]),
       if(q.isEmpty) const Padding(padding:EdgeInsets.all(16),child:Text('Queue empty. Tap +',style:TextStyle(color:Colors.white54,fontSize:11),textAlign:TextAlign.center))
-      else...List.generate(q.length,(i)=>ListTile(dense:true,title:Text(q[i].name,style:const TextStyle(fontSize:12),maxLines:1,overflow:TextOverflow.ellipsis),subtitle: i==qPos%q.length && auto?const Text('next',style:TextStyle(fontSize:8,color:Color(0xFFCEBBFF))):null, trailing:IconButton(icon:const Icon(Icons.close,size:16),onPressed:()=>setState(()=>q.removeAt(i))),onTap:()async{ qPos=i; final tgt=p(live).playing?o(live):(nm(live)==null?live:o(live)); await _load(tgt,q[i],play:false); setState((){}); })),
+      else...List.generate(q.length,(i)=>ListTile(dense:true,title:Text(q[i].name,style:const TextStyle(fontSize:12),maxLines:1,overflow:TextOverflow.ellipsis),subtitle: i==qPos%q.length && auto?const Text('next',style:TextStyle(fontSize:8,color:Color(0xFFCEBBFF))):null, trailing:IconButton(icon:const Icon(Icons.close,size:16),onPressed:()=>setState(()=>q.removeAt(i))),onTap:()async{
+        // FIX: allowed in BOTH auto and manual - just loads free deck, does NOT auto-start queue
+        final tgt=p(live).playing?o(live):(nm(live)==null?live:o(live));
+        if(q[i].path.isNotEmpty){ await _load(tgt,q[i],play:false); qPos=(i+1)%q.length; setState((){}); }
+      })),
       const SizedBox(height:80),
     ]),
   );
