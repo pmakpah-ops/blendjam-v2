@@ -1,7 +1,7 @@
 name: blendjam
 description: BlendJam - Crossfade DJ mixer with auto 10s trim.
 publish_to: 'none'
-version: 1.0.0+5
+version: 1.0.0+6
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -14,7 +14,7 @@ dependencies:
   just_audio: 0.9.40
   file_picker: 8.1.4
   audio_session: 0.1.21
-  audiotags: ^0.4.2
+  audiotags: ^1.4.5
 
 dev_dependencies:
   flutter_test:
