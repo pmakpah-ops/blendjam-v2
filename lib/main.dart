@@ -1,1024 +1,269 @@
-import 'dart:async';
-import 'dart:math' as math;
+import 'dart:async';import 'dart:math' as m;
 import 'dart:typed_data';
-
 import 'package:audiotags/audiotags.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
-
-void main() {
-  runApp(const BlendJamApp());
-}
-
-class BlendJamApp extends StatelessWidget {
-  const BlendJamApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(),
-      home: const DJ(),
-    );
-  }
-}
-
-class Track {
-  final String path;
-  final String name;
-
-  const Track(this.path, this.name);
-}
-
-enum Deck { a, b }
-
-class DJ extends StatefulWidget {
-  const DJ({super.key});
-
-  @override
-  State<DJ> createState() => _DJState();
-}
-
-class _DJState extends State<DJ> {
-  static const purple = Color(0xFFCEBBFF);
-
-  static const fadeTime = Duration(seconds: 10);
-  static const preloadTime = Duration(seconds: 15);
-  static const trim = Duration(milliseconds: 350);
-
-  final AudioPlayer playerA = AudioPlayer();
-  final AudioPlayer playerB = AudioPlayer();
-
-  StreamSubscription<Duration>? positionA;
-  StreamSubscription<Duration>? positionB;
-
-  String? nameA;
-  String? nameB;
-
-  Uint8List? artA;
-  Uint8List? artB;
-
-  Deck liveDeck = Deck.a;
-
-  bool autoMix = true;
-  bool crossfading = false;
-
-  double crossfader = 0;
-
-  final List<Track> queue = [];
-  int queueIndex = 0;
-
-  bool nextLoaded = false;
-
-  AudioPlayer _player(Deck d) {
-    return d == Deck.a ? playerA : playerB;
-  }
-
-  Deck _other(Deck d) {
-    return d == Deck.a ? Deck.b : Deck.a;
-  }
-
-  String? _name(Deck d) {
-    return d == Deck.a ? nameA : nameB;
-  }
-
-  Uint8List? _art(Deck d) {
-    return d == Deck.a ? artA : artB;
-  }
-
-  void _setName(Deck d, String? value) {
-    if (d == Deck.a) {
-      nameA = value;
-    } else {
-      nameB = value;
-    }
-  }
-
-  void _setArt(Deck d, Uint8List? value) {
-    if (d == Deck.a) {
-      artA = value;
-    } else {
-      artB = value;
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-
-    positionA = playerA.positionStream.listen(
-      (p) => _checkTransition(Deck.a, p),
-    );
-
-    positionB = playerB.positionStream.listen(
-      (p) => _checkTransition(Deck.b, p),
-    );
-  }
-
-  @override
-  void dispose() {
-    positionA?.cancel();
-    positionB?.cancel();
-
-    playerA.dispose();
-    playerB.dispose();
-
-    super.dispose();
-  }
-
-  // ============================================================
-  // QUEUE
-  // ============================================================
-
-  Track? _nextTrack() {
-    if (queue.isEmpty) {
-      return null;
-    }
-
-    final track = queue[queueIndex % queue.length];
-
-    queueIndex++;
-
-    if (queueIndex >= queue.length) {
-      queueIndex = 0;
-    }
-
-    return track;
-  }
-
-  // ============================================================
-  // ARTWORK
-  // ============================================================
-
-  Future<Uint8List?> _getArtwork(String path) async {
-    try {
-      final tags = await AudioTags.read(path);
-
-      if (tags != null && tags.pictures.isNotEmpty) {
-        return tags.pictures.first.bytes;
-      }
-    } catch (_) {}
-
-    return null;
-  }
-
-  // ============================================================
-  // LOAD DECK
-  // ============================================================
-
-  Future<bool> _load(
-    Deck deck,
-    Track track, {
-    bool play = false,
-  }) async {
-    final pl = _player(deck);
-
-    _setName(deck, track.name);
-    _setArt(deck, null);
-
-    if (mounted) {
-      setState(() {});
-    }
-
-    try {
-      await pl.stop();
-
-      await pl.setFilePath(track.path);
-
-      final duration = pl.duration;
-
-      if (duration != null && duration > trim) {
-        await pl.seek(trim);
-      } else {
-        await pl.seek(Duration.zero);
-      }
-    } catch (e) {
-      _message(
-        'Could not load ${track.name}',
-      );
-      return false;
-    }
-
-    unawaited(
-      _getArtwork(track.path).then((image) {
-        if (!mounted) return;
-
-        _setArt(deck, image);
-
-        setState(() {});
-      }),
-    );
-
-    await pl.setVolume(
-      play ? 1.0 : 0.0,
-    );
-
-    if (play) {
-      await _makeLive(
-        deck,
-        play: true,
-      );
-    }
-
-    if (mounted) {
-      setState(() {});
-    }
-
-    return true;
-  }
-
-  // ============================================================
-  // MAKE LIVE
-  // ============================================================
-
-  Future<void> _makeLive(
-    Deck deck, {
-    bool play = false,
-  }) async {
-    final active = _player(deck);
-    final inactive = _player(_other(deck));
-
-    liveDeck = deck;
-
-    nextLoaded = false;
-
-    crossfader = deck == Deck.a ? 0 : 1;
-
-    await inactive.setVolume(0);
-
-    await active.setVolume(1);
-
-    if (play) {
-      await active.play();
-    }
-
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  // ============================================================
-  // PREPARE NEXT
-  // ============================================================
-
-  Future<void> _prepareNext() async {
-    if (queue.isEmpty || crossfading) {
-      return;
-    }
-
-    final nextDeck = _other(liveDeck);
-
-    if (_name(nextDeck) != null) {
-      return;
-    }
-
-    final next = _nextTrack();
-
-    if (next == null) {
-      return;
-    }
-
-    await _load(
-      nextDeck,
-      next,
-      play: false,
-    );
-  }
-
-  // ============================================================
-  // AUTO START
-  // ============================================================
-
-  Future<void> _startAuto() async {
-    if (queue.isEmpty) {
-      _message('Add music to the queue first.');
-      return;
-    }
-
-    if (_name(liveDeck) == null) {
-      final first = _nextTrack();
-
-      if (first == null) {
-        return;
-      }
-
-      final ok = await _load(
-        liveDeck,
-        first,
-        play: true,
-      );
-
-      if (!ok) return;
-    } else {
-      final pl = _player(liveDeck);
-
-      if (!pl.playing) {
-        await pl.play();
-      }
-    }
-
-    await _prepareNext();
-
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  // ============================================================
-  // TRANSITION CHECK
-  // ============================================================
-
-  void _checkTransition(
-    Deck deck,
-    Duration position,
-  ) {
-    if (!mounted) return;
-
-    if (crossfading) return;
-
-    if (deck != liveDeck) return;
-
-    final pl = _player(deck);
-
-    if (!pl.playing) return;
-
-    final duration = pl.duration;
-
-    if (duration == null) return;
-
-    final remaining = duration - position;
-
-    // Load next song before the transition.
-    if (remaining <= preloadTime &&
-        _name(_other(deck)) == null &&
-        !nextLoaded &&
-        queue.isNotEmpty) {
-      nextLoaded = true;
-
-      unawaited(
-        _prepareNext(),
-      );
-    }
-
-    // Start transition.
-    //
-    // Do NOT use == 10 seconds.
-    if (remaining <= fadeTime) {
-      final target = _other(deck);
-
-      if (_name(target) != null) {
-        unawaited(
-          _crossfade(target),
-        );
-      }
-    }
-  }
-
-  // ============================================================
-  // CROSSFADE
-  // ============================================================
-
-  Future<void> _crossfade(Deck target) async {
-    if (crossfading) return;
-
-    if (_name(target) == null) return;
-
-    final source = liveDeck;
-
-    if (source == target) return;
-
-    final sourcePlayer = _player(source);
-    final targetPlayer = _player(target);
-
-    crossfading = true;
-
-    try {
-      await targetPlayer.setVolume(0);
-
-      if (!targetPlayer.playing) {
-        await targetPlayer.play();
-      }
-
-      const steps = 100;
-
-      final delay = Duration(
-        milliseconds:
-            fadeTime.inMilliseconds ~/ steps,
-      );
-
-      for (int i = 1; i <= steps; i++) {
-        final value = i / steps;
-
-        final sourceVolume =
-            math.cos(
-              value * math.pi / 2,
-            );
-
-        final targetVolume =
-            math.sin(
-              value * math.pi / 2,
-            );
-
-        await sourcePlayer.setVolume(
-          sourceVolume,
-        );
-
-        await targetPlayer.setVolume(
-          targetVolume,
-        );
-
-        crossfader =
-            source == Deck.a
-                ? value
-                : 1 - value;
-
-        if (mounted) {
-          setState(() {});
-        }
-
-        await Future<void>.delayed(
-          delay,
-        );
-      }
-
-      await sourcePlayer.setVolume(0);
-
-      await targetPlayer.setVolume(1);
-
-      await sourcePlayer.stop();
-
-      _setName(source, null);
-      _setArt(source, null);
-
-      liveDeck = target;
-
-      nextLoaded = false;
-
-      if (mounted) {
-        setState(() {});
-      }
-    } catch (_) {
-      _message('Crossfade failed.');
-    }
-
-    crossfading = false;
-
-    if (mounted) {
-      setState(() {});
-    }
-
-    if (autoMix) {
-      await _prepareNext();
-    }
-  }
-
-  // ============================================================
-  // PLAY / PAUSE
-  // ============================================================
-
-  Future<void> _togglePlay(Deck deck) async {
-    if (crossfading) return;
-
-    final pl = _player(deck);
-
-    try {
-      // --------------------------------------------------------
-      // PAUSE
-      // --------------------------------------------------------
-
-      if (pl.playing) {
-        await pl.pause();
-
-        if (mounted) {
-          setState(() {});
-        }
-
-        return;
-      }
-
-      // --------------------------------------------------------
-      // NO TRACK
-      // --------------------------------------------------------
-
-      if (_name(deck) == null) {
-        if (queue.isEmpty) {
-          _message(
-            'Add an audio file first.',
-          );
-          return;
-        }
-
-        final track = _nextTrack();
-
-        if (track == null) {
-          return;
-        }
-
-        final ok = await _load(
-          deck,
-          track,
-        );
-
-        if (!ok) return;
-      }
-
-      // --------------------------------------------------------
-      // OTHER DECK
-      // --------------------------------------------------------
-
-      if (deck != liveDeck &&
-          _name(liveDeck) != null) {
-        await _crossfade(deck);
-        return;
-      }
-
-      // --------------------------------------------------------
-      // PLAY
-      // --------------------------------------------------------
-
-      liveDeck = deck;
-
-      crossfader =
-          deck == Deck.a ? 0 : 1;
-
-      await _player(
-        _other(deck),
-      ).setVolume(0);
-
-      await pl.setVolume(1);
-
-      await pl.play();
-
-      if (autoMix) {
-        await _prepareNext();
-      }
-
-      if (mounted) {
-        setState(() {});
-      }
-    } catch (e) {
-      _message(
-        'Playback error.',
-      );
-    }
-  }
-
-  // ============================================================
-  // PICK FILE
-  // ============================================================
-
-  Future<void> _pick(
-    Deck deck,
-  ) async {
-    final result =
-        await FilePicker.platform.pickFiles(
-      type: FileType.audio,
-    );
-
-    if (result == null) return;
-
-    final path =
-        result.files.single.path;
-
-    if (path == null) return;
-
-    final track = Track(
-      path,
-      result.files.single.name,
-    );
-
-    final ok = await _load(
-      deck,
-      track,
-      play: true,
-    );
-
-    if (!ok) return;
-
-    liveDeck = deck;
-
-    if (autoMix) {
-      await _prepareNext();
-    }
-
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  // ============================================================
-  // ADD QUEUE
-  // ============================================================
-
-  Future<void> _addQueue() async {
-    final result =
-        await FilePicker.platform.pickFiles(
-      type: FileType.audio,
-      allowMultiple: true,
-    );
-
-    if (result == null) return;
-
-    final tracks = result.files
-        .where(
-          (f) => f.path != null,
-        )
-        .map(
-          (f) => Track(
-            f.path!,
-            f.name,
-          ),
-        )
-        .toList();
-
-    if (tracks.isEmpty) return;
-
-    setState(() {
-      queue.addAll(tracks);
-    });
-
-    if (autoMix) {
-      await _startAuto();
-    }
-  }
-
-  // ============================================================
-  // NEXT
-  // ============================================================
-
-  Future<void> _next(
-    Deck deck,
-  ) async {
-    if (queue.isEmpty) return;
-
-    if (crossfading) return;
-
-    final track = _nextTrack();
-
-    if (track == null) return;
-
-    final ok = await _load(
-      deck,
-      track,
-      play: deck == liveDeck,
-    );
-
-    if (!ok) return;
-
-    if (deck == liveDeck &&
-        autoMix) {
-      await _prepareNext();
-    }
-  }
-
-  // ============================================================
-  // PREVIOUS
-  // ============================================================
-
-  Future<void> _previous(
-    Deck deck,
-  ) async {
-    if (queue.isEmpty) return;
-
-    if (crossfading) return;
-
-    queueIndex -= 2;
-
-    while (queueIndex < 0) {
-      queueIndex += queue.length;
-    }
-
-    final track = _nextTrack();
-
-    if (track == null) return;
-
-    final ok = await _load(
-      deck,
-      track,
-      play: deck == liveDeck,
-    );
-
-    if (!ok) return;
-
-    if (deck == liveDeck &&
-        autoMix) {
-      await _prepareNext();
-    }
-  }
-
-  // ============================================================
-  // SEEK
-  // ============================================================
-
-  Future<void> _seek(
-    Deck deck,
-    int seconds,
-  ) async {
-    final pl = _player(deck);
-
-    var position =
-        pl.position +
-        Duration(seconds: seconds);
-
-    if (position < Duration.zero) {
-      position = Duration.zero;
-    }
-
-    final duration = pl.duration;
-
-    if (duration != null &&
-        position > duration) {
-      position = duration;
-    }
-
-    await pl.seek(position);
-  }
-
-  // ============================================================
-  // CROSSFADER
-  // ============================================================
-
-  Future<void> _setCrossfader(
-    double value,
-  ) async {
-    if (crossfading) return;
-
-    crossfader = value;
-
-    await playerA.setVolume(
-      1 - value,
-    );
-
-    await playerB.setVolume(
-      value,
-    );
-
-    if (value >= 0.5) {
-      liveDeck = Deck.b;
-    } else {
-      liveDeck = Deck.a;
-    }
-
-    final target =
-        value >= 0.5
-            ? Deck.b
-            : Deck.a;
-
-    if (_name(target) != null &&
-        !_player(target).playing) {
-      await _player(target).play();
-    }
-
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  // ============================================================
-  // MESSAGE
-  // ============================================================
-
-  void _message(
-    String text,
-  ) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(text),
-        ),
-      );
-  }
-
-  // ============================================================
-  // DECK
-  // ============================================================
-
-  Widget _deck(
-    Deck deck,
-  ) {
-    return DeckView(
-      deck: deck,
-      player: _player(deck),
-      trackName:
-          _name(deck) ?? 'No track',
-      artwork: _art(deck),
-      live: liveDeck == deck,
-      next:
-          liveDeck != deck &&
-          _name(deck) != null,
-      onPlay:
-          () => _togglePlay(deck),
-      onPick:
-          () => _pick(deck),
-      onPrevious:
-          () => _previous(deck),
-      onNext:
-          () => _next(deck),
-      onSeek:
-          (seconds) =>
-              _seek(deck, seconds),
-    );
-  }
-
-  // ============================================================
-  // UI
-  // ============================================================
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'BlendJam',
-          style: TextStyle(
-            fontSize: 26,
-          ),
-        ),
-        actions: [
-          const Text('AUTO'),
-
-          Switch(
-            value: autoMix,
-            activeColor: purple,
-            onChanged: (value) async {
-              setState(() {
-                autoMix = value;
-              });
-
-              if (value) {
-                await _startAuto();
-              }
-            },
-          ),
-
-          const SizedBox(width: 8),
-        ],
-      ),
-
-      body: ListView(
-        padding:
-            const EdgeInsets.all(14),
-        children: [
-          _deck(Deck.a),
-
-          const SizedBox(height: 4),
-
-          Row(
-            children: [
-              const Text('A'),
-
-              Expanded(
-                child: Slider(
-                  value: crossfader
-                      .clamp(0.0, 1.0),
-                  min: 0,
-                  max: 1,
-                  activeColor: purple,
-                  onChanged:
-                      _setCrossfader,
-                ),
-              ),
-
-              const Text('B'),
-            ],
-          ),
-
-          Center(
-            child: Text(
-              crossfading
-                  ? 'MIXING '
-                    '${(crossfader * 100).toInt()}%'
-                  : '',
-              style:
-                  const TextStyle(
-                color: purple,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          _deck(Deck.b),
-
-          const SizedBox(height: 12),
-
-          Row(
-            mainAxisAlignment:
-                MainAxisAlignment
-                    .spaceBetween,
-            children: [
-              Text(
-                'QUEUE ${queue.length}',
-              ),
-
-              IconButton(
-                icon: const Icon(
-                  Icons.add_circle,
-                ),
-                onPressed:
-                    _addQueue,
-              ),
-            ],
-          ),
-
-          ...queue.asMap().entries.map(
-            (entry) {
-              return ListTile(
-                dense: true,
-
-                leading: Text(
-                  '${entry.key + 1}',
-                ),
-
-                title: Text(
-                  entry.value.name,
-                  maxLines: 1,
-                  overflow:
-                      TextOverflow.ellipsis,
-                  style:
-                      const TextStyle(
-                    fontSize: 13,
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ==================================================================
-// DECK VIEW
-// ==================================================================
-
-class DeckView extends StatefulWidget {
-  final Deck deck;
-  final AudioPlayer player;
-
-  final String trackName;
-  final Uint8List? artwork;
-
-  final bool live;
-  final bool next;
-
-  final VoidCallback onPlay;
-  final VoidCallback onPick;
-  final VoidCallback onPrevious;
-  final VoidCallback onNext;
-
-  final Future<void> Function(
-    int seconds,
-  ) onSeek;
-
-  const DeckView({
-    super.key,
-    required this.deck,
-    required this.player,
-    required this.trackName,
-    required this.artwork,
-    required this.live,
-    required this.next,
-    required this.onPlay,
-    required this.onPick,
-    required this.onPrevious,
-    required this.onNext,
-    required this.onSeek,
-  });
-
-  @override
-  State<DeckView> createState() =>
-      _DeckViewState();
-}
-
-class _DeckViewState
-    extends State<DeckView>
-    with SingleTickerProviderStateMixin {
-  late AnimationController rotation;
-
-  StreamSubscription<PlayerState>?
-      stateSubscription;
-
-  @override
-  void initState() {
-    super.initState();
-
-    rotation =
-        AnimationController(
-      vsync: this,
-      duration:
-          const Duration(seconds: 3),
-    );
-
-    stateSubscription =
-        widget.player.playerStateStream
-            .listen(
-      (state) {
-        if (!mou
+void main()=>runApp(const BlendJamApp());
+class BlendJamApp extends StatelessWidget{
+ const BlendJamApp({super.key});
+ @override Widget build(c)=>MaterialApp(
+  debugShowCheckedModeBanner:false,
+  theme:ThemeData.dark(),home:const DJ());}
+class Track{final String p,n;const Track(this.p,this.n);}
+enum Deck{a,b}
+class DJ extends StatefulWidget{
+ const DJ({super.key});@override State<DJ> createState()=>_S();}
+class _S extends State<DJ>{
+ static const pu=Color(0xFFCEBBFF);
+ static const fadeT=Duration(seconds:10);
+ static const preT=Duration(seconds:15);
+ static const trim=Duration(milliseconds:350);
+ final pa=AudioPlayer(),pb=AudioPlayer();
+ StreamSubscription<Duration>? sa,sb;
+ String? na,nb;Uint8List? aa,ab;
+ Deck live=Deck.a;bool auto=true,xf=false;
+ double xfad=0;List<Track> q=[];int qi=0;bool nl=false;
+ P(Deck d)=>d==Deck.a?pa:pb;
+ O(Deck d)=>d==Deck.a?Deck.b:Deck.a;
+ N(Deck d)=>d==Deck.a?na:nb;
+ A(Deck d)=>d==Deck.a?aa:ab;
+ SN(Deck d,v){d==Deck.a?na=v:nb=v;}
+ SA(Deck d,v){d==Deck.a?aa=v:ab=v;}
+ @override void initState(){super.initState();
+  sa=pa.positionStream.listen((p)=>_ck(Deck.a,p));
+  sb=pb.positionStream.listen((p)=>_ck(Deck.b,p));}
+ @override void dispose(){
+  sa?.cancel();sb?.cancel();pa.dispose();pb.dispose();
+  super.dispose();}
+ Track? _next(){if(q.isEmpty) return null;
+  var t=q[qi%q.length];qi=(qi+1)%q.length;
+  if(qi>=q.length) qi=0;return t;}
+ Future<Uint8List?> _art(String p) async{try{
+   var t=await AudioTags.read(p);
+   if(t!=null&&t.pictures.isNotEmpty)
+    return t.pictures.first.bytes;
+  }catch(_){}return null;}
+ Future<bool> _load(Deck d,Track t,{bool play=false}) async{
+  var pl=P(d);SN(d,t.n);SA(d,null);setState((){});
+  try{await pl.stop();await pl.setFilePath(t.p);
+   var du=pl.duration;
+   if(du!=null&&du>trim) await pl.seek(trim);
+   else await pl.seek(Duration.zero);
+  }catch(e){_msg('Could not load ${t.n}');return false;}
+  _art(t.p).then((i){if(!mounted) return;
+   SA(d,i);setState((){});});
+  await pl.setVolume(play?1:0);
+  if(play) await _live(d,play:true);
+  setState((){});return true;}
+ Future _live(Deck d,{bool play=false}) async{
+  var ac=P(d),inac=P(O(d));
+  live=d;nl=false;xfad=d==Deck.a?0:1;
+  await inac.setVolume(0);await ac.setVolume(1);
+  if(play) await ac.play();setState((){});}
+ Future _prep() async{if(q.isEmpty||xf) return;
+  var nd=O(live);if(N(nd)!=null) return;
+  var nx=_next();if(nx==null) return;
+  await _load(nd,nx,play:false);}
+ Future _auto() async{if(q.isEmpty){
+   _msg('Add music first');return;}
+  if(N(live)==null){var f=_next();
+   if(f==null) return;var ok=await _load(live,f,play:true);
+   if(!ok) return;}else{var pl=P(live);
+   if(!pl.playing) await pl.play();}
+  await _prep();setState((){});}
+ void _ck(Deck d,Duration p){if(!mounted||xf) return;
+  if(d!=live) return;var pl=P(d);if(!pl.playing) return;
+  var du=pl.duration;if(du==null) return;
+  var rem=du-p;
+  if(rem<=preT&&N(O(d))==null&&!nl&&q.isNotEmpty){
+   nl=true;unawaited(_prep());}
+  if(rem<=fadeT){var tar=O(d);if(N(tar)!=null)
+   unawaited(_fade(tar));}}
+ Future _fade(Deck tar) async{if(xf) return;
+  if(N(tar)==null) return;var src=live;
+  if(src==tar) return;var sp=P(src),tp=P(tar);
+  xf=true;try{await tp.setVolume(0);
+   if(!tp.playing) await tp.play();
+   const st=100;var dl=Duration(
+    milliseconds:fadeT.inMilliseconds~/st);
+   for(int i=1;i<=st;i++){var v=i/st;
+    var sv=m.cos(v*m.pi/2),tv=m.sin(v*m.pi/2);
+    await sp.setVolume(sv);await tp.setVolume(tv);
+    xfad=src==Deck.a?v:1-v;
+    if(mounted) setState((){});await Future.delayed(dl);}
+   await sp.setVolume(0);await tp.setVolume(1);
+   await sp.stop();SN(src,null);SA(src,null);
+   live=tar;nl=false;setState((){});
+  }catch(_){_msg('Crossfade failed');}
+  xf=false;setState((){});if(auto) await _prep();}
+ Future _tog(Deck d) async{if(xf) return;var pl=P(d);
+  try{if(pl.playing){await pl.pause();setState((){});return;}
+   if(N(d)==null){if(q.isEmpty){_msg('Add file first');return;}
+    var t=_next();if(t==null) return;
+    var ok=await _load(d,t);if(!ok) return;}
+   if(d!=live&&N(live)!=null){await _fade(d);return;}
+   live=d;xfad=d==Deck.a?0:1;await P(O(d)).setVolume(0);
+   await pl.setVolume(1);await pl.play();if(auto) await _prep();
+   setState((){});}catch(e){_msg('Playback error');}}
+ Future _pick(Deck d) async{var r=await FilePicker.platform
+   .pickFiles(type:FileType.audio);if(r==null) return;
+  var p=r.files.single.path;if(p==null) return;
+  var t=Track(p,r.files.single.name);
+  var ok=await _load(d,t,play:true);if(!ok) return;
+  live=d;if(auto) await _prep();setState((){});}
+ Future _aq() async{var r=await FilePicker.platform.pickFiles(
+   type:FileType.audio,allowMultiple:true);if(r==null) return;
+  var ts=r.files.where((f)=>f.path!=null)
+   .map((f)=>Track(f.path!,f.name)).toList();
+  if(ts.isEmpty) return;setState(()=>q.addAll(ts));
+  if(auto) await _auto();}
+ Future _nextD(Deck d) async{if(q.isEmpty||xf) return;
+  var t=_next();if(t==null) return;
+  var ok=await _load(d,t,play:d==live);if(!ok) return;
+  if(d==live&&auto) await _prep();}
+ Future _prevD(Deck d) async{if(q.isEmpty||xf) return;
+  qi-=2;while(qi<0) qi+=q.length;var t=_next();
+  if(t==null) return;var ok=await _load(d,t,play:d==live);
+  if(!ok) return;if(d==live&&auto) await _prep();}
+ Future _seek(Deck d,int s) async{var pl=P(d);
+  var p=pl.position+Duration(seconds:s);
+  if(p<Duration.zero) p=Duration.zero;
+  var du=pl.duration;if(du!=null&&p>du) p=du;
+  await pl.seek(p);}
+ Future _setX(double v) async{if(xf) return;xfad=v;
+  await pa.setVolume(1-v);await pb.setVolume(v);
+  live=v>=0.5?Deck.b:Deck.a;var tar=v>=0.5?Deck.b:Deck.a;
+  if(N(tar)!=null&&!P(tar).playing) await P(tar).play();
+  setState((){});}
+ void _msg(String t){if(!mounted) return;
+  ScaffoldMessenger.of(context)..hideCurrentSnackBar()
+   ..showSnackBar(SnackBar(content:Text(t)));}
+ Widget _deck(Deck d)=>DeckView(deck:d,player:P(d),
+  name:N(d)??'No track',art:A(d),live:live==d,
+  next:live!=d&&N(d)!=null,onPlay:()=>_tog(d),
+  onPick:()=>_pick(d),onPrev:()=>_prevD(d),
+  onNext:()=>_nextD(d),onSeek:(s)=>_seek(d,s));
+ @override Widget build(c)=>Scaffold(
+  appBar:AppBar(title:const Text('BlendJam',
+   style:TextStyle(fontSize:26)),actions:[
+   const Text('AUTO'),Switch(value:auto,activeColor:pu,
+    onChanged:(v) async{setState(()=>auto=v);if(v) await _auto();}),
+   const SizedBox(width:8)]),
+  body:ListView(padding:const EdgeInsets.all(14),children:[
+   _deck(Deck.a),const SizedBox(height:4),
+   Row(children:[const Text('A'),Expanded(child:Slider(
+     value:xfad.clamp(0.0,1.0),min:0,max:1,
+     activeColor:pu,onChanged:_setX)),const Text('B')]),
+   Center(child:Text(xf?'MIXING ${(xfad*100).toInt()}%':'',
+    style:const TextStyle(color:pu))),
+   const SizedBox(height:8),_deck(Deck.b),
+   const SizedBox(height:12),
+   Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+    Text('QUEUE ${q.length}'),IconButton(
+     icon:const Icon(Icons.add_circle),onPressed:_aq)]),
+   ...q.asMap().entries.map((e)=>ListTile(dense:true,
+    leading:Text('${e.key+1}'),title:Text(e.value.n,
+     maxLines:1,overflow:TextOverflow.ellipsis,
+     style:const TextStyle(fontSize:13)))) ]));}
+
+class DeckView extends StatefulWidget{
+ final Deck deck;final AudioPlayer player;
+ final String name;final Uint8List? art;
+ final bool live,next;
+ final VoidCallback onPlay,onPick,onPrev,onNext;
+ final Future<void> Function(int) onSeek;
+ const DeckView({super.key,required this.deck,
+  required this.player,required this.name,
+  required this.art,required this.live,
+  required this.next,required this.onPlay,
+  required this.onPick,required this.onPrev,
+  required this.onNext,required this.onSeek});
+ @override State<DeckView> createState()=>_DV();}
+class _DV extends State<DeckView>
+ with SingleTickerProviderStateMixin{
+ late AnimationController rot;
+ StreamSubscription<PlayerState>? subs;
+ @override void initState(){super.initState();
+  rot=AnimationController(vsync:this,
+   duration:const Duration(seconds:3));
+  subs=widget.player.playerStateStream.listen((s){
+   if(!mounted) return;if(s.playing) rot.repeat();
+   else rot.stop();setState((){});});}
+ @override void dispose(){subs?.cancel();rot.dispose();super.dispose();}
+ String _fmt(Duration d)=>'${d.inMinutes.remainder(60).toString().padLeft(2,'0')}:'
+  '${d.inSeconds.remainder(60).toString().padLeft(2,'0')}';
+ Widget _rec()=>SizedBox(width:190,height:190,
+  child:CustomPaint(painter:_RP(
+   art:widget.art,active:widget.live)));
+ @override Widget build(c)=>Column(children:[
+  Text('DECK ${widget.deck==Deck.a?'A':'B'} '
+   '${widget.live?'(LIVE)':widget.next?'(NEXT)':''}',
+   style:TextStyle(fontWeight:FontWeight.bold,
+    color:widget.live?const Color(0xFFCEBBFF):Colors.white70)),
+  const SizedBox(height:8),
+  SizedBox(width:220,height:220,
+   child:Stack(alignment:Alignment.center,children:[
+    RotationTransition(turns:rot,child:_rec()),
+    Container(width:74,height:74,decoration:BoxDecoration(
+     shape:BoxShape.circle,color:const Color(0xFF101010),
+     border:Border.all(color:widget.live?const Color(0xFFCEBBFF):Colors.white24,width:2))),
+    StreamBuilder<bool>(stream:widget.player.playingStream,
+     initialData:widget.player.playing,
+     builder:(ctx,snap){bool playing=snap.data??false;
+      return Material(color:Colors.transparent,
+       shape:const CircleBorder(),
+       child:InkWell(customBorder:const CircleBorder(),
+        onTap:widget.onPlay,child:Container(width:68,height:68,
+         alignment:Alignment.center,decoration:BoxDecoration(
+          shape:BoxShape.circle,color:const Color(0xFFCEBBFF),
+          boxShadow:[BoxShadow(blurRadius:10,spreadRadius:1,
+           color:const Color(0xFFCEBBFF).withOpacity(0.45))]),
+         child:Icon(playing?Icons.pause:Icons.play_arrow,
+          size:38,color:Colors.black))));}),
+  ])),
+  const SizedBox(height:8),
+  Text(widget.name,style:const TextStyle(fontSize:13),
+   maxLines:1,overflow:TextOverflow.ellipsis),
+  StreamBuilder<Duration>(stream:widget.player.positionStream,
+   builder:(c,s){var p=s.data??Duration.zero;
+    var du=widget.player.duration??const Duration(seconds:1);
+    double pr=du.inMilliseconds>0?p.inMilliseconds/du.inMilliseconds:0;
+    pr=pr.clamp(0.0,1.0);
+    return Column(children:[Slider(value:pr,min:0,max:1,
+      activeColor:widget.live?const Color(0xFFCEBBFF):Colors.white54,
+      onChanged:(v) async{await widget.player.seek(Duration(
+       milliseconds:(v*du.inMilliseconds).round()));}),
+     Text('${_fmt(p)} / ${_fmt(du)}',style:const TextStyle(
+      fontSize:11,color:Colors.white38)),
+     Row(mainAxisAlignment:MainAxisAlignment.center,children:[
+      IconButton(icon:const Icon(Icons.skip_previous),onPressed:widget.onPrev),
+      IconButton(icon:const Icon(Icons.replay_10),onPressed:()=>widget.onSeek(-10)),
+      IconButton(icon:const Icon(Icons.folder_open),onPressed:widget.onPick),
+      IconButton(icon:const Icon(Icons.forward_10),onPressed:()=>widget.onSeek(10)),
+      IconButton(icon:const Icon(Icons.skip_next),onPressed:widget.onNext)])]);})]);}
+
+class _RP extends CustomPainter{
+ final Uint8List? art;final bool active;
+ _RP({required this.art,required this.active});
+ @override void paint(Canvas cv,Size sz){
+  var ct=Offset(sz.width/2,sz.height/2);
+  var rad=sz.width/2;
+  var rec=Paint()..shader=const SweepGradient(colors:[
+   Color(0xFF087BFF),Color(0xFF111111),
+   Color(0xFFFF7A00),Color(0xFF111111),Color(0xFF087BFF)])
+   .createShader(Rect.fromCircle(center:ct,radius:rad));
+  cv.drawCircle(ct,rad,rec);
+  cv.drawCircle(ct,rad-7,Paint()..color=const Color(0xFF080808));
+  var gro=Paint()..style=PaintingStyle.stroke..strokeWidth=1
+   ..color=Colors.white.withOpacity(0.08);
+  for(double r=20;r<rad-10;r+=5) cv.drawCircle(ct,r,gro);
+  if(art!=null){try{var img=MemoryImage(art!);
+   // artwork drawn via ClipOval in widget, painter keeps grooves
+  }catch(_){}}
+  cv.drawCircle(ct,40,Paint()..color=const Color(0xFF171717));
+  cv.drawCircle(ct,37,Paint()..color=const Color(0xFF101010));
+  cv.drawCircle(ct,37,Paint()..style=PaintingStyle.stroke..strokeWidth=2
+   ..color=active?const Color(0xFFCEBBFF):Colors.white24);}
+ @override bool shouldRepaint(covariant _RP o)=>
+  o.active!=active||o.art!=art;}
