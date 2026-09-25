@@ -7,11 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'widgets/deck_light_ring.dart';
 
-void main() => runApp(const MaterialApp(
+void main() => runApp(MaterialApp(
   debugShowCheckedModeBanner: false,
-  themeMode: ThemeMode.dark,
-  darkTheme: ThemeData.dark(),
-  home: DJ()
+  theme: ThemeData.dark(),
+  home: const DJ()
 ));
 
 class Q { String p,n; Q(this.p,this.n); }
@@ -321,8 +320,7 @@ class _VS extends State<_V> with TickerProviderStateMixin{
           var p=s.data??Duration.zero;
           var du=widget.pl.duration?? const Duration(seconds:1);
           var pr=du.inMilliseconds>0 ? p.inMilliseconds/du.inMilliseconds : 0.0;
-          String f(Duration d)=
-            '${d.inMinutes.remainder(60).toString().padLeft(2,'0')}:${d.inSeconds.remainder(60).toString().padLeft(2,'0')}';
+          String fmt(Duration dd) => '${dd.inMinutes.remainder(60).toString().padLeft(2,'0')}:${dd.inSeconds.remainder(60).toString().padLeft(2,'0')}';
           return Column(children:[
             Slider(value: pr.clamp(0.0,1.0), min:0, max:1,
               activeColor: widget.live? const Color(0xFFCEBBFF): Colors.white54,
@@ -330,7 +328,7 @@ class _VS extends State<_V> with TickerProviderStateMixin{
                 await widget.pl.seek(
                   Duration(milliseconds:(v*du.inMilliseconds).toInt()));
               }),
-            Text('${f(p)} / ${f(du)}',
+            Text('${fmt(p)} / ${fmt(du)}',
               style: const TextStyle(fontSize:11,color:Colors.white38)),
             Row(mainAxisAlignment:MainAxisAlignment.center, children:[
               IconButton(icon: const Icon(Icons.skip_previous), onPressed: widget.onPrev),
