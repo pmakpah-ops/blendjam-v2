@@ -22,8 +22,8 @@ class _S extends State<DJ>{
  final pa=AudioPlayer(),pb=AudioPlayer();
  StreamSubscription<Duration>? sa,sb;
  String? na,nb;Uint8List? aa,ab;
- Deck live=Deck.a;bool auto=true,xf=false;
- double xfad=0;List<Track> q=[];int qi=0;
+ Deck live=Deck.a;bool auto=false,xf=false;
+ double xfad=0.0;List<Track> q=[];int qi=0;
  P(Deck d)=>d==Deck.a?pa:pb;
  O(Deck d)=>d==Deck.a?Deck.b:Deck.a;
  N(Deck d)=>d==Deck.a?na:nb;
@@ -43,24 +43,23 @@ class _S extends State<DJ>{
    if(t!=null&&t.pictures.isNotEmpty)
     return t.pictures.first.bytes;
   }catch(_){}return null;}
- // FIX: always pause NEXT deck at trim so it never runs to 04:55 silently
  Future<bool> _load(Deck d,Track t,{bool play=false}) async{
   var pl=P(d);SN(d,t.n);SA(d,null);setState((){});
   try{await pl.stop();await pl.setFilePath(t.p);
    var du=pl.duration;
    if(du!=null&&du>trim) await pl.seek(trim);
    else await pl.seek(Duration.zero);
-   await pl.pause(); // IMPORTANT: keep NEXT paused
-  }catch(e){_msg('Load fail ${t.n}');return false;}
+   await pl.pause();
+  }catch(e){_msg('Load fail');return false;}
   _art(t.p).then((i){if(!mounted) return;
    SA(d,i);setState((){});});
-  await pl.setVolume(play?1:0);
+  await pl.setVolume(play?1.0:0.0);
   if(play) await _live(d,play:true);
   setState((){});return true;}
  Future _live(Deck d,{bool play=false}) async{
-  live=d;xfad=d==Deck.a?0:1;
-  await P(O(d)).setVolume(0);
-  await P(d).setVolume(1);
+  live=d;xfad=d==Deck.a?0.0:1.0;
+  await P(O(d)).setVolume(0.0);
+  await P(d).setVolume(1.0);
   if(play) await P(d).play();setState((){});}
  Future _prep() async{if(q.isEmpty||xf) return;
   var nd=O(live);if(N(nd)!=null) return;
@@ -72,31 +71,31 @@ class _S extends State<DJ>{
    if(f==null) return;await _load(live,f,play:true);}
   else{var pl=P(live);if(!pl.playing) await pl.play();}
   await _prep();setState((){});}
+ // FIX: preload 15s, fade 10s, works even when auto OFF if NEXT loaded
  void _ck(Deck d,Duration p){if(!mounted||xf) return;
   if(d!=live) return;var pl=P(d);if(!pl.playing) return;
   var du=pl.duration;if(du==null) return;
   var rem=du-p;
-  if(rem<=preT&&N(O(d))==null&&q.isNotEmpty){
+  if(rem<=preT&&N(O(d))==null&&auto&&q.isNotEmpty){
    unawaited(_prep());}
   if(rem<=fadeT&&N(O(d))!=null){
    unawaited(_fade(O(d)));}}
- // FIX: seek to trim before play, finally reset xf
  Future _fade(Deck tar) async{if(xf) return;
   if(N(tar)==null) return;var src=live;
   if(src==tar) return;var sp=P(src),tp=P(tar);
   xf=true;try{
-   await tp.seek(trim); // reset from 04:55 to 00:00
-   await tp.setVolume(0);
+   await tp.seek(trim);await tp.setVolume(0.0);
    await tp.play();
    const st=100;
    var dl=Duration(milliseconds:fadeT.inMilliseconds~/st);
    for(int i=1;i<=st;i++){var v=i/st;
     var sv=m.cos(v*m.pi/2),tv=m.sin(v*m.pi/2);
-    await sp.setVolume(sv);await tp.setVolume(tv);
-    xfad=src==Deck.a?v:1-v;
+    await sp.setVolume(sv.toDouble());
+    await tp.setVolume(tv.toDouble());
+    xfad=src==Deck.a?v:1.0-v;
     if(mounted) setState((){});
     await Future.delayed(dl);}
-   await sp.setVolume(0);await tp.setVolume(1);
+   await sp.setVolume(0.0);await tp.setVolume(1.0);
    await sp.stop();await sp.seek(trim);await sp.pause();
    SN(src,null);SA(src,null);live=tar;
   }catch(e){_msg('Crossfade failed: $e');}
@@ -108,9 +107,10 @@ class _S extends State<DJ>{
     await _load(d,t,play:d==live);if(d==live) await _prep();
     return;}
    if(d!=live&&N(live)!=null){await _fade(d);return;}
-   live=d;xfad=d==Deck.a?0:1;
-   await P(O(d)).setVolume(0);await pl.setVolume(1);
-   await pl.play();if(auto) await _prep();setState((){});
+   live=d;xfad=d==Deck.a?0.0:1.0;
+   await P(O(d)).setVolume(0.0);
+   await pl.setVolume(1.0);await pl.play();
+   if(auto) await _prep();setState((){});
   }catch(e){_msg('Play err');}}
  Future _pick(Deck d) async{var r=await FilePicker.platform
    .pickFiles(type:FileType.audio);if(r==null) return;
@@ -136,7 +136,8 @@ class _S extends State<DJ>{
   var du=pl.duration;if(du!=null&&p>du) p=du;
   await pl.seek(p);}
  Future _setX(double v) async{if(xf) return;xfad=v;
-  await pa.setVolume(1-v);await pb.setVolume(v);
+  await pa.setVolume((1.0-v).clamp(0.0,1.0));
+  await pb.setVolume(v.clamp(0.0,1.0));
   live=v>=0.5?Deck.b:Deck.a;setState((){});}
  void _msg(String t){if(!mounted) return;
   ScaffoldMessenger.of(context)..hideCurrentSnackBar()
@@ -150,7 +151,8 @@ class _S extends State<DJ>{
   appBar:AppBar(title:const Text('BlendJam',
    style:TextStyle(fontSize:26)),actions:[
    const Text('AUTO'),Switch(value:auto,activeColor:pu,
-    onChanged:(v) async{setState(()=>auto=v);if(v) await _auto();}),
+    onChanged:(v) async{setState(()=>auto=v);
+     if(v) await _auto();}),
    const SizedBox(width:8)]),
   body:ListView(padding:const EdgeInsets.all(14),children:[
    _deck(Deck.a),const SizedBox(height:4),
@@ -195,17 +197,27 @@ class _DV extends State<DeckView>
  @override void dispose(){subs?.cancel();rot.dispose();super.dispose();}
  String _fmt(Duration d)=>'${d.inMinutes.remainder(60).toString().padLeft(2,'0')}:'
   '${d.inSeconds.remainder(60).toString().padLeft(2,'0')}';
- // FIX ART: show Image.memory when art exists
- Widget _discArt(){if(widget.art!=null&&widget.art!.isNotEmpty){
-   return Container(width:190,height:190,
-    decoration:BoxDecoration(shape:BoxShape.circle,
-     border:Border.all(color:widget.live?const Color(0xFFCEBBFF):Colors.white24,width:2)),
-    child:ClipOval(child:Stack(fit:StackFit.expand,children:[
-     Image.memory(widget.art!,fit:BoxFit.cover,gaplessPlayback:true),
-     Center(child:Container(width:74,height:74,
-      decoration:const BoxDecoration(shape:BoxShape.circle,color:Color(0xFF101010))))])));}
-  return SizedBox(width:190,height:190,
-   child:CustomPaint(painter:_RP(active:widget.live)));}
+ // FIX ART + RING ALLOWANCE: art 160, ring 220, hollow 74
+ Widget _discArt(){
+  Widget base;
+  if(widget.art!=null&&widget.art!.isNotEmpty){
+   base=ClipOval(child:Image.memory(
+    widget.art!,width:160,height:160,
+    fit:BoxFit.cover,gaplessPlayback:true));}
+  else{
+   base=ClipOval(child:Image.asset(
+    'assets/images/default_cover.png',
+    width:160,height:160,fit:BoxFit.cover));}
+  return Container(width:190,height:190,
+   decoration:BoxDecoration(shape:BoxShape.circle,
+    color:Colors.black,
+    border:Border.all(color:widget.live?const Color(0xFFCEBBFF):Colors.white24,width:2)),
+   child:Stack(alignment:Alignment.center,children:[
+    base,
+    // inner hollow so ring not covered by art
+    Container(width:74,height:74,decoration:const BoxDecoration(
+     shape:BoxShape.circle,color:Color(0xFF101010))),
+   ]));}
  @override Widget build(c)=>Column(children:[
   Text('DECK ${widget.deck==Deck.a?'A':'B'} '
    '${widget.live?'(LIVE)':widget.next?'(NEXT)':''}',
@@ -214,10 +226,13 @@ class _DV extends State<DeckView>
   const SizedBox(height:8),
   SizedBox(width:220,height:220,
    child:Stack(alignment:Alignment.center,children:[
+    // RING LIGHT OUTER - 220 allowance so art does not conceal
+    Container(width:220,height:220,decoration:BoxDecoration(
+     shape:BoxShape.circle,
+     border:Border.all(color:widget.live?const Color(0xFFCEBBFF):Colors.transparent,width:3),
+     boxShadow:widget.live?[BoxShadow(blurRadius:18,
+      color:const Color(0xFFCEBBFF).withOpacity(0.6))]:null)),
     RotationTransition(turns:rot,child:_discArt()),
-    Container(width:74,height:74,decoration:BoxDecoration(
-     shape:BoxShape.circle,color:const Color(0xFF101010),
-     border:Border.all(color:widget.live?const Color(0xFFCEBBFF):Colors.white24,width:2))),
     StreamBuilder<bool>(stream:widget.player.playingStream,
      initialData:widget.player.playing,
      builder:(ctx,snap){bool pl=snap.data??false;
@@ -251,22 +266,3 @@ class _DV extends State<DeckView>
       IconButton(icon:const Icon(Icons.folder_open),onPressed:widget.onPick),
       IconButton(icon:const Icon(Icons.forward_10),onPressed:()=>widget.onSeek(10)),
       IconButton(icon:const Icon(Icons.skip_next),onPressed:widget.onNext)])]);})]);}
-
-class _RP extends CustomPainter{
- final bool active;_RP({required this.active});
- @override void paint(Canvas cv,Size sz){
-  var ct=Offset(sz.width/2,sz.height/2);var rad=sz.width/2;
-  var rec=Paint()..shader=const SweepGradient(colors:[
-   Color(0xFF087BFF),Color(0xFF111111),
-   Color(0xFFFF7A00),Color(0xFF111111),Color(0xFF087BFF)])
-   .createShader(Rect.fromCircle(center:ct,radius:rad));
-  cv.drawCircle(ct,rad,rec);
-  cv.drawCircle(ct,rad-7,Paint()..color=const Color(0xFF080808));
-  var gro=Paint()..style=PaintingStyle.stroke..strokeWidth=1
-   ..color=Colors.white.withOpacity(0.08);
-  for(double r=20;r<rad-10;r+=5) cv.drawCircle(ct,r,gro);
-  cv.drawCircle(ct,40,Paint()..color=const Color(0xFF171717));
-  cv.drawCircle(ct,37,Paint()..color=const Color(0xFF101010));
-  cv.drawCircle(ct,37,Paint()..style=PaintingStyle.stroke..strokeWidth=2
-   ..color=active?const Color(0xFFCEBBFF):Colors.white24);}
- @override bool shouldRepaint(covariant _RP o)=>o.active!=active;}
