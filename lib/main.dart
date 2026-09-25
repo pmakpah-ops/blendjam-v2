@@ -49,12 +49,11 @@ class _S extends State<DJ>{
    var du=pl.duration;
    if(du!=null&&du>trim) await pl.seek(trim);
    else await pl.seek(Duration.zero);
-   await pl.pause();
+   await pl.setVolume(0.0);await pl.pause();
   }catch(e){_msg('Load fail');return false;}
   _art(t.p).then((i){if(!mounted) return;
    SA(d,i);setState((){});});
-  await pl.setVolume(play?1.0:0.0);
-  if(play) await _live(d,play:true);
+  if(play){await _live(d,play:true);}
   setState((){});return true;}
  Future _live(Deck d,{bool play=false}) async{
   live=d;xfad=d==Deck.a?0.0:1.0;
@@ -71,7 +70,6 @@ class _S extends State<DJ>{
    if(f==null) return;await _load(live,f,play:true);}
   else{var pl=P(live);if(!pl.playing) await pl.play();}
   await _prep();setState((){});}
- // FIX: preload 15s, fade 10s, works even when auto OFF if NEXT loaded
  void _ck(Deck d,Duration p){if(!mounted||xf) return;
   if(d!=live) return;var pl=P(d);if(!pl.playing) return;
   var du=pl.duration;if(du==null) return;
@@ -90,23 +88,22 @@ class _S extends State<DJ>{
    var dl=Duration(milliseconds:fadeT.inMilliseconds~/st);
    for(int i=1;i<=st;i++){var v=i/st;
     var sv=m.cos(v*m.pi/2),tv=m.sin(v*m.pi/2);
-    await sp.setVolume(sv.toDouble());
-    await tp.setVolume(tv.toDouble());
+    await sp.setVolume(sv);await tp.setVolume(tv);
     xfad=src==Deck.a?v:1.0-v;
     if(mounted) setState((){});
     await Future.delayed(dl);}
    await sp.setVolume(0.0);await tp.setVolume(1.0);
    await sp.stop();await sp.seek(trim);await sp.pause();
    SN(src,null);SA(src,null);live=tar;
-  }catch(e){_msg('Crossfade failed: $e');}
+  }catch(e){_msg('Crossfade failed');}
   finally{xf=false;setState((){});if(auto) await _prep();}}
  Future _tog(Deck d) async{if(xf) return;var pl=P(d);
   try{if(pl.playing){await pl.pause();setState((){});return;}
    if(N(d)==null){if(q.isEmpty){_msg('Add file');return;}
     var t=_next();if(t==null) return;
-    await _load(d,t,play:d==live);if(d==live) await _prep();
-    return;}
-   if(d!=live&&N(live)!=null){await _fade(d);return;}
+    await _load(d,t,play:true);return;}
+   if(d!=live&&N(live)!=null&&N(d)!=null){
+    await _fade(d);return;}
    live=d;xfad=d==Deck.a?0.0:1.0;
    await P(O(d)).setVolume(0.0);
    await pl.setVolume(1.0);await pl.play();
@@ -115,9 +112,8 @@ class _S extends State<DJ>{
  Future _pick(Deck d) async{var r=await FilePicker.platform
    .pickFiles(type:FileType.audio);if(r==null) return;
   var p=r.files.single.path;if(p==null) return;
-  var t=Track(p,r.files.single.name);
-  await _load(d,t,play:true);live=d;
-  if(auto) await _prep();setState((){});}
+  await _load(d,Track(p,r.files.single.name),play:true);
+  live=d;if(auto) await _prep();setState((){});}
  Future _aq() async{var r=await FilePicker.platform.pickFiles(
    type:FileType.audio,allowMultiple:true);if(r==null) return;
   var ts=r.files.where((f)=>f.path!=null)
@@ -197,41 +193,39 @@ class _DV extends State<DeckView>
  @override void dispose(){subs?.cancel();rot.dispose();super.dispose();}
  String _fmt(Duration d)=>'${d.inMinutes.remainder(60).toString().padLeft(2,'0')}:'
   '${d.inSeconds.remainder(60).toString().padLeft(2,'0')}';
- // FIX ART + RING ALLOWANCE: art 160, ring 220, hollow 74
  Widget _discArt(){
-  Widget base;
+  Widget img;
   if(widget.art!=null&&widget.art!.isNotEmpty){
-   base=ClipOval(child:Image.memory(
-    widget.art!,width:160,height:160,
-    fit:BoxFit.cover,gaplessPlayback:true));}
+   img=Image.memory(widget.art!,width:160,height:160,
+    fit:BoxFit.cover,gaplessPlayback:true);}
   else{
-   base=ClipOval(child:Image.asset(
-    'assets/images/default_cover.png',
-    width:160,height:160,fit:BoxFit.cover));}
+   img=Image.asset('assets/images/default_cover.png',
+    width:160,height:160,fit:BoxFit.cover);}
   return Container(width:190,height:190,
    decoration:BoxDecoration(shape:BoxShape.circle,
     color:Colors.black,
-    border:Border.all(color:widget.live?const Color(0xFFCEBBFF):Colors.white24,width:2)),
-   child:Stack(alignment:Alignment.center,children:[
-    base,
-    // inner hollow so ring not covered by art
-    Container(width:74,height:74,decoration:const BoxDecoration(
-     shape:BoxShape.circle,color:Color(0xFF101010))),
-   ]));}
+    border:Border.all(color:widget.live?Colors.white24:Colors.white12,width:1)),
+   child:ClipOval(child:Stack(fit:StackFit.expand,children:[
+    img,
+    // grooves overlay so art doesn't look flat
+    CustomPaint(painter:_Grooves()),
+    Center(child:Container(width:74,height:74,
+     decoration:const BoxDecoration(shape:BoxShape.circle,color:Color(0xFF101010)),
+     child:Container(margin:const EdgeInsets.all(3),
+      decoration:BoxDecoration(shape:BoxShape.circle,
+       border:Border.all(color:widget.live?Color(0xFFCEBBFF):Colors.white24,width:1.5)))))])));}
+
  @override Widget build(c)=>Column(children:[
   Text('DECK ${widget.deck==Deck.a?'A':'B'} '
    '${widget.live?'(LIVE)':widget.next?'(NEXT)':''}',
    style:TextStyle(fontWeight:FontWeight.bold,
     color:widget.live?const Color(0xFFCEBBFF):Colors.white70)),
   const SizedBox(height:8),
-  SizedBox(width:220,height:220,
+  SizedBox(width:230,height:230,
    child:Stack(alignment:Alignment.center,children:[
-    // RING LIGHT OUTER - 220 allowance so art does not conceal
-    Container(width:220,height:220,decoration:BoxDecoration(
-     shape:BoxShape.circle,
-     border:Border.all(color:widget.live?const Color(0xFFCEBBFF):Colors.transparent,width:3),
-     boxShadow:widget.live?[BoxShadow(blurRadius:18,
-      color:const Color(0xFFCEBBFF).withOpacity(0.6))]:null)),
+    // RESTORED RING LIGHT - sharp blue/orange blend, 230 allowance
+    CustomPaint(size:const Size(230,230),
+     painter:_RingLight(isLive:widget.live,playing:widget.player.playing)),
     RotationTransition(turns:rot,child:_discArt()),
     StreamBuilder<bool>(stream:widget.player.playingStream,
      initialData:widget.player.playing,
@@ -241,8 +235,8 @@ class _DV extends State<DeckView>
         onTap:widget.onPlay,child:Container(width:68,height:68,
          alignment:Alignment.center,decoration:BoxDecoration(
           shape:BoxShape.circle,color:const Color(0xFFCEBBFF),
-          boxShadow:[BoxShadow(blurRadius:10,spreadRadius:1,
-           color:const Color(0xFFCEBBFF).withOpacity(0.45))]),
+          boxShadow:[BoxShadow(blurRadius:12,
+           color:const Color(0xFFCEBBFF).withOpacity(0.6))]),
          child:Icon(pl?Icons.pause:Icons.play_arrow,
           size:38,color:Colors.black))));}),
   ])),
@@ -266,3 +260,35 @@ class _DV extends State<DeckView>
       IconButton(icon:const Icon(Icons.folder_open),onPressed:widget.onPick),
       IconButton(icon:const Icon(Icons.forward_10),onPressed:()=>widget.onSeek(10)),
       IconButton(icon:const Icon(Icons.skip_next),onPressed:widget.onNext)])]);})]);}
+
+class _RingLight extends CustomPainter{
+ final bool isLive,playing;_RingLight({required this.isLive,required this.playing});
+ @override void paint(Canvas cv,Size sz){
+  var ct=Offset(sz.width/2,sz.height/2);
+  var rad=sz.width/2;
+  if(!isLive){ // idle = thin dim ring
+   cv.drawCircle(ct,rad,Paint()..style=PaintingStyle.stroke..strokeWidth=2
+    ..color=Colors.white12);return;}
+  // LIVE = sharp blend blue/orange with glow
+  var ringPaint=Paint()..style=PaintingStyle.stroke..strokeWidth=4
+   ..shader=SweepGradient(colors:const[
+    Color(0xFF087BFF),Color(0xFF111111),
+    Color(0xFFFF7A00),Color(0xFF111111),Color(0xFF087BFF)])
+   .createShader(Rect.fromCircle(center:ct,radius:rad));
+  cv.drawCircle(ct,rad-2,ringPaint);
+  // outer glow
+  if(playing){
+   var glow=Paint()..style=PaintingStyle.stroke..strokeWidth=10
+    ..color=const Color(0xFFCEBBFF).withOpacity(0.25)..maskFilter=
+     const MaskFilter.blur(BlurStyle.normal,8);
+   cv.drawCircle(ct,rad-2,glow);}}
+ @override bool shouldRepaint(covariant _RingLight o)=>
+  o.isLive!=isLive||o.playing!=playing;}
+
+class _Grooves extends CustomPainter{
+ @override void paint(Canvas cv,Size sz){
+  var ct=Offset(sz.width/2,sz.height/2);var rad=sz.width/2;
+  var p=Paint()..style=PaintingStyle.stroke..strokeWidth=1
+   ..color=Colors.white.withOpacity(0.06);
+  for(double r=25;r<rad-5;r+=6) cv.drawCircle(ct,r,p);}
+ @override bool shouldRepaint(covariant CustomPainter old)=>false;}
