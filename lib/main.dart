@@ -122,8 +122,11 @@ class _VS extends State<_V> with TickerProviderStateMixin{
     '${widget.live?'(LIVE)':widget.nxt?'(NEXT)':''}',
     style:TextStyle(fontWeight:FontWeight.bold,color:widget.live
       ?const Color(0xFFCEBBFF):Colors.white70)),
-   const SizedBox(height:8),SizedBox(width:220,height:220,
+   const SizedBox(height:8),
+   SizedBox(width:220,height:220,
     child:Stack(alignment:Alignment.center,children:[
+     DeckLightRing(isLive:widget.live,isPlaying:widget.pl.playing,
+      child:const SizedBox(width:220,height:220)),
      RotationTransition(turns:r,child:widget.ar!=null?Container(
        width:190,height:190,decoration:BoxDecoration(
         shape:BoxShape.circle,border:Border.all(
@@ -132,7 +135,8 @@ class _VS extends State<_V> with TickerProviderStateMixin{
          Image.memory(widget.ar!,fit:BoxFit.cover),Center(child:Container(
           width:72,height:72,decoration:const BoxDecoration(
            shape:BoxShape.circle,color:Colors.black)))])))
-      :ClipOval(child:Image.asset('assets/images/default_cover.png',
+      :ClipOval(child:Image.asset(
+        'assets/images/default_cover.png',
         width:190,height:190,fit:BoxFit.cover))),
      Container(width:68,height:68,decoration:BoxDecoration(
        shape:BoxShape.circle,color:const Color(0xFFCEBBFF),boxShadow:[
@@ -143,8 +147,7 @@ class _VS extends State<_V> with TickerProviderStateMixin{
         return IconButton(iconSize:36,icon:Icon(
          playing?Icons.pause:Icons.play_arrow,color:Colors.black),
          onPressed:widget.onPP);})),
-     DeckLightRing(isLive:widget.live,isPlaying:widget.pl.playing,
-      child:const SizedBox(width:190,height:190)),])),
+   ])),
    const SizedBox(height:8),Text(widget.na,
     style:const TextStyle(fontSize:13),maxLines:1,
     overflow:TextOverflow.ellipsis),
