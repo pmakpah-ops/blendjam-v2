@@ -23,119 +23,399 @@ class DJ extends StatefulWidget{
 class _S extends State<DJ>{
  final a=AudioPlayer(),b=AudioPlayer();
  String? na,nb;Uint8List? aa,ab;
- double x=0;bool au=true,xg=false;D lv=D.a;
- List<Q> q=[];int qp=0;bool ar=false;
+ double x=0;bool au=true,xg=false;
+ D lv=D.a;List<Q> q=[];int qp=0;bool ar=false;
  P(d)=>d==D.a?a:b;O(d)=>d==D.a?D.b:D.a;
  N(d)=>d==D.a?na:nb;A(d)=>d==D.a?aa:ab;
- SN(d,v){d==D.a?na=v:nb=v;}SA(d,v){d==D.a?aa=v:ab=v;}
+ SN(d,v){d==D.a?na=v:nb=v;}
+ SA(d,v){d==D.a?aa=v:ab=v;}
 
  @override void initState(){
   super.initState();
   a.positionStream.listen((p)=>_ck(D.a,p));
   b.positionStream.listen((p)=>_ck(D.b,p));
  }
- @override void dispose(){a.dispose();b.dispose();super.dispose();}
+ @override void dispose(){
+  a.dispose();b.dispose();super.dispose();
+ }
 
- Q? _nl(){if(q.isEmpty) return null;var t=q[qp%q.length];qp=(qp+1)%q.length;return t;}
+ Q? _nl(){
+  if(q.isEmpty) return null;
+  var t=q[qp%q.length];
+  qp=(qp+1)%q.length;return t;
+ }
 
  Future<Uint8List?> _art(p) async{
-  try{var t=await AudioTags.read(p);if(t!=null&&t.pictures.isNotEmpty) return t.pictures.first.bytes;}catch(_){}
+  try{
+   var t=await AudioTags.read(p);
+   if(t!=null&&t.pictures.isNotEmpty){
+    return t.pictures.first.bytes;
+   }
+  }catch(_){}
   return null;
  }
 
  Future _ld(D d,Q t,{bool play=false}) async{
   SN(d,t.n);SA(d,null);setState((){});
   var pl=P(d);
-  try{await pl.stop();await pl.setFilePath(t.p);await pl.seek(Duration.zero);}catch(e){return;}
-  _art(t.p).then((img){SA(d,img);if(mounted) setState((){});});
-  if(play){lv=d;x=d==D.a?0:1;await P(D.a).setVolume(d==D.a?1:0);await P(D.b).setVolume(d==D.b?1:0);await pl.setVolume(1);await pl.play();}
-  else{await pl.setVolume(0);}
+  try{
+   await pl.stop();
+   await pl.setFilePath(t.p);
+   await pl.seek(Duration.zero);
+  }catch(e){return;}
+  _art(t.p).then((img){
+   SA(d,img);if(mounted) setState((){});
+  });
+  if(play){
+   lv=d;x=d==D.a?0:1;
+   await P(D.a).setVolume(d==D.a?1:0);
+   await P(D.b).setVolume(d==D.b?1:0);
+   await pl.setVolume(1);await pl.play();
+  }else{await pl.setVolume(0);}
   setState((){});
  }
 
  Future _as() async{
   if(q.isEmpty) return;
   if(N(lv)==null) await _ld(lv,_nl()!,play:true);
-  if(N(O(lv))==null&&q.length>1) await _ld(O(lv),_nl()!);
+  if(N(O(lv))==null&&q.length>1){
+   await _ld(O(lv),_nl()!);
+  }
  }
 
  void _ck(D d,Duration p){
   if(xg||ar) return;if(d!=lv) return;
-  var du=P(d).duration;if(du==null||!P(d).playing) return;
+  var du=P(d).duration;
+  if(du==null||!P(d).playing) return;
   var r=du-p;
-  if(au&&r.inSeconds==15){var f=O(lv);if(N(f)==null) _ld(f,_nl()!);}
-  if(r.inSeconds<=10&&r.inSeconds>=9){if(N(D.a)!=null&&N(D.b)!=null){ar=true;_fade();}}
+  if(au&&r.inSeconds==15){
+   var f=O(lv);if(N(f)==null) _ld(f,_nl()!);
+  }
+  if(r.inSeconds<=10&&r.inSeconds>=9){
+   if(N(D.a)!=null&&N(D.b)!=null){
+    ar=true;_fade();
+   }
+  }
  }
 
  void _fade(){
-  if(xg) return;var s=lv,t=O(s);if(N(t)==null){ar=false;return;}
-  xg=true;var sp=P(s),tp=P(t);tp.setVolume(0);tp.play();int k=0;
-  Timer.periodic(const Duration(milliseconds:60),(tm) async{
-   k++;double l=k/100;if(l>1) l=1;double sv=m.cos(l*m.pi/2),tv=m.sin(l*m.pi/2);
-   x=s==D.a?l:1-l;await sp.setVolume(sv);await tp.setVolume(tv);
+  if(xg) return;
+  var s=lv,t=O(s);
+  if(N(t)==null){ar=false;return;}
+  xg=true;var sp=P(s),tp=P(t);
+  tp.setVolume(0);tp.play();int k=0;
+  Timer.periodic(
+   const Duration(milliseconds:60),(tm) async{
+   k++;double l=k/100;if(l>1) l=1;
+   double sv=m.cos(l*m.pi/2);
+   double tv=m.sin(l*m.pi/2);
+   x=s==D.a?l:1-l;
+   await sp.setVolume(sv);
+   await tp.setVolume(tv);
    if(mounted) setState((){});
-   if(k>=100){tm.cancel();x=s==D.a?1:0;await sp.setVolume(0);await tp.setVolume(1);await sp.stop();SN(s,null);SA(s,null);lv=t;xg=false;ar=false;setState((){});if(au&&N(O(lv))==null&&q.isNotEmpty) _ld(O(lv),_nl()!);}
+   if(k>=100){
+    tm.cancel();x=s==D.a?1:0;
+    await sp.setVolume(0);
+    await tp.setVolume(1);await sp.stop();
+    SN(s,null);SA(s,null);
+    lv=t;xg=false;ar=false;setState((){});
+    if(au&&N(O(lv))==null&&q.isNotEmpty){
+     _ld(O(lv),_nl()!);
+    }
+   }
   });
  }
 
  Future _pk(bool isA) async{
-  var r=await FilePicker.platform.pickFiles(type:FileType.audio);if(r==null) return;
-  await _ld(isA?D.a:D.b,Q(r.files.single.path!,r.files.single.name),play:true);
+  var r=await FilePicker.platform
+   .pickFiles(type:FileType.audio);
+  if(r==null) return;
+  await _ld(isA?D.a:D.b,
+   Q(r.files.single.path!,r.files.single.name),
+   play:true);
  }
+
  Future _aq() async{
-  var r=await FilePicker.platform.pickFiles(type:FileType.audio,allowMultiple:true);if(r==null) return;
-  setState(()=>q.addAll(r.files.where((f)=>f.path!=null).map((f)=>Q(f.path!,f.name))));await _as();
+  var r=await FilePicker.platform.pickFiles(
+   type:FileType.audio,allowMultiple:true);
+  if(r==null) return;
+  setState(()=>q.addAll(r.files
+   .where((f)=>f.path!=null)
+   .map((f)=>Q(f.path!,f.name))));
+  await _as();
  }
- Future _nx(D d) async{if(q.isEmpty) return;await _ld(d,_nl()!,play:d==lv);}
- Future _pv(D d) async{if(q.isEmpty) return;qp=(qp-2+q.length)%q.length;var t=q[qp%q.length];qp=(qp+1)%q.length;await _ld(d,t,play:d==lv);}
+
+ Future _nx(D d) async{
+  if(q.isEmpty) return;
+  await _ld(d,_nl()!,play:d==lv);
+ }
+
+ Future _pv(D d) async{
+  if(q.isEmpty) return;
+  qp=(qp-2+q.length)%q.length;
+  var t=q[qp%q.length];
+  qp=(qp+1)%q.length;
+  await _ld(d,t,play:d==lv);
+ }
 
  _disc(bool isA){
   var d=isA?D.a:D.b;var pl=P(d);
-  return _V(d:d,pl:pl,na:N(d)??'No track',ar:A(d),live:lv==d,nxt:O(lv)==d&&N(d)!=null,
+  return _V(
+   d:d,pl:pl,na:N(d)??'No track',ar:A(d),
+   live:lv==d,nxt:O(lv)==d&&N(d)!=null,
    onPk:()=>_pk(isA),
    onPP:() async{
     try{
      if(pl.playing){await pl.pause();}
-     else{lv=d;x=d==D.a?0:1;await P(D.a).setVolume(d==D.a?1:0);await P(D.b).setVolume(d==D.b?1:0);if(N(d)==null&&q.isNotEmpty){await _ld(d,_nl()!,play:true);}else{await pl.setVolume(1);await pl.play();}}
+     else{
+      lv=d;x=d==D.a?0:1;
+      await P(D.a).setVolume(d==D.a?1:0);
+      await P(D.b).setVolume(d==D.b?1:0);
+      if(N(d)==null&&q.isNotEmpty){
+       await _ld(d,_nl()!,play:true);
+      }else{
+       await pl.setVolume(1);await pl.play();
+      }
+     }
      setState((){});
     }catch(e){}
    },
    onNext:()=>_nx(d),onPrev:()=>_pv(d),
-   onF:(s) async{var p=pl.position+Duration(seconds:s);if(p<Duration.zero) p=Duration.zero;await pl.seek(p);});
+   onF:(s) async{
+    var p=pl.position+Duration(seconds:s);
+    if(p<Duration.zero) p=Duration.zero;
+    await pl.seek(p);
+   });
  }
 
  @override Widget build(c){
   return Scaffold(
-   appBar:AppBar(title:const Text('BlendJam'),actions:[const Text('AUTO'),Switch(value:au,activeColor:const Color(0xFFCEBBFF),onChanged:(v) async{setState(()=>au=v);if(v) await _as();}),const SizedBox(width:10)]),
-   body:ListView(padding:const EdgeInsets.all(14),children:[
-    _disc(true),
-    Row(children:[const Text('A'),Expanded(child:Slider(value:x,min:0,max:1,activeColor:const Color(0xFFCEBBFF),onChanged:(v){if(xg) return;x=v;a.setVolume(1-v);b.setVolume(v);if(v>=0.5&&N(D.b)!=null) lv=D.b;if(v<0.5&&N(D.a)!=null) lv=D.a;setState((){});})),const Text('B')]),
-    Center(child:Text(xg?'MIXING ${(x*100).toInt()}%':'',style:const TextStyle(color:Color(0xFFCEBBFF)))),
-    _disc(false),const SizedBox(height:10),
-    Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text('QUEUE ${q.length}'),IconButton(icon:const Icon(Icons.add_circle),onPressed:_aq)]),
-    ...q.map((e)=>ListTile(dense:true,title:Text(e.n,style:const TextStyle(fontSize:13),maxLines:1),onTap:() async{var tg=N(lv)==null?lv:O(lv);await _ld(tg,e,play:N(lv)==null);}))
+   appBar:AppBar(
+    title:const Text('BlendJam'),
+    actions:[
+     const Text('AUTO'),
+     Switch(
+      value:au,
+      activeColor:const Color(0xFFCEBBFF),
+      onChanged:(v) async{
+       setState(()=>au=v);if(v) await _as();
+      }),
+     const SizedBox(width:10)
+    ]),
+   body:ListView(
+    padding:const EdgeInsets.all(14),
+    children:[
+     _disc(true),
+     Row(children:[
+      const Text('A'),
+      Expanded(child:Slider(
+       value:x,min:0,max:1,
+       activeColor:const Color(0xFFCEBBFF),
+       onChanged:(v){
+        if(xg) return;x=v;
+        a.setVolume(1-v);b.setVolume(v);
+        if(v>=0.5&&N(D.b)!=null) lv=D.b;
+        if(v<0.5&&N(D.a)!=null) lv=D.a;
+        setState((){});
+       })),
+      const Text('B')
+     ]),
+     Center(child:Text(
+      xg?'MIXING ${(x*100).toInt()}%':'',
+      style:const TextStyle(
+       color:Color(0xFFCEBBFF)))),
+     _disc(false),
+     const SizedBox(height:10),
+     Row(
+      mainAxisAlignment:
+       MainAxisAlignment.spaceBetween,
+      children:[
+       Text('QUEUE ${q.length}'),
+       IconButton(
+        icon:const Icon(Icons.add_circle),
+        onPressed:_aq)
+     ]),
+     ...q.map((e)=>ListTile(
+      dense:true,
+      title:Text(e.n,
+       style:const TextStyle(fontSize:13),
+       maxLines:1),
+      onTap:() async{
+       var tg=N(lv)==null?lv:O(lv);
+       await _ld(tg,e,play:N(lv)==null);
+      }
+     ))
    ])
   );
  }
 }
 
 class _V extends StatefulWidget{
- final D d;final pl;final String na;final ar;final bool live,nxt;final onPk,onPP,onPrev,onNext,onF;
- const _V({required this.d,required this.pl,required this.na,required this.ar,required this.live,required this.nxt,required this.onPk,required this.onPP,required this.onPrev,required this.onNext,required this.onF});
+ final D d;final pl;final String na;
+ final ar;final bool live,nxt;
+ final onPk,onPP,onPrev,onNext,onF;
+ const _V(
+  {required this.d,required this.pl,
+   required this.na,required this.ar,
+   required this.live,required this.nxt,
+   required this.onPk,required this.onPP,
+   required this.onPrev,required this.onNext,
+   required this.onF});
  @override State<_V> createState()=>_VS();
 }
 
-class _VS extends State<_V> with TickerProviderStateMixin{
+class _VS extends State<_V>
+ with TickerProviderStateMixin{
  late AnimationController r;
- @override void initState(){super.initState();r=AnimationController(vsync:this,duration:const Duration(seconds:3));widget.pl.playerStateStream.listen((s){if(!mounted) return;if(s.playing) r.repeat();else r.stop();});}
- @override void dispose(){r.dispose();super.dispose();}
+ @override void initState(){
+  super.initState();
+  r=AnimationController(
+   vsync:this,
+   duration:const Duration(seconds:3));
+  widget.pl.playerStateStream.listen((s){
+   if(!mounted) return;
+   if(s.playing) r.repeat();else r.stop();
+  });
+ }
+ @override void dispose(){
+  r.dispose();super.dispose();
+ }
 
  @override Widget build(c){
   return Column(children:[
-   Text('DECK ${widget.d==D.a?'A':'B'} ${widget.live?'(LIVE)':widget.nxt?'(NEXT)':''}',style:TextStyle(fontWeight:FontWeight.bold,color:widget.live?const Color(0xFFCEBBFF):Colors.white70)),
+   Text(
+    'DECK ${widget.d==D.a?'A':'B'} '
+    '${widget.live?'(LIVE)':widget.nxt?'(NEXT)':''}',
+    style:TextStyle(
+     fontWeight:FontWeight.bold,
+     color:widget.live
+      ?const Color(0xFFCEBBFF)
+      :Colors.white70)),
    const SizedBox(height:8),
-   SizedBox(width:220,height:220,child:Stack(alignment:Alignment.center,children:[
-    RotationTransition(turns:r,child:widget.ar!=null
-     ? Container(width:190,height:190,decoration:BoxDecoration(shape:BoxShape.circle,border:Border.all(color:widget.live?const Color(0xFFCEBBFF):Colors.white24,width:2)),child:ClipOval(child:Stack(fit:StackFit.expand,children:[Image.memory(widget.ar!,fit:BoxFit.cover),Center(child:Container(width:72,height:72,decoration:const BoxDecoration(shape:BoxShape.circle,color:Colors.black)))])))
-     : ClipOval(child:Image.asset('assets/images/default_cover.png',width:190,height:190,fit:BoxFit.cover))),
-    Container(width:68,height:68,decoration
+   SizedBox(
+    width:220,height:220,
+    child:Stack(
+     alignment:Alignment.center,
+     children:[
+      RotationTransition(
+       turns:r,
+       child:widget.ar!=null
+        ?Container(
+         width:190,height:190,
+         decoration:BoxDecoration(
+          shape:BoxShape.circle,
+          border:Border.all(
+           color:widget.live
+            ?const Color(0xFFCEBBFF)
+            :Colors.white24,
+           width:2)),
+         child:ClipOval(
+          child:Stack(
+           fit:StackFit.expand,
+           children:[
+            Image.memory(
+             widget.ar!,
+             fit:BoxFit.cover),
+            Center(
+             child:Container(
+              width:72,height:72,
+              decoration:const BoxDecoration(
+               shape:BoxShape.circle,
+               color:Colors.black)))
+           ])))
+        :ClipOval(
+         child:Image.asset(
+          'assets/images/default_cover.png',
+          width:190,height:190,
+          fit:BoxFit.cover))
+      ),
+      Container(
+       width:68,height:68,
+       decoration:BoxDecoration(
+        shape:BoxShape.circle,
+        color:const Color(0xFFCEBBFF),
+        boxShadow:[
+         BoxShadow(
+          blurRadius:12,
+          color:const Color(0xFFCEBBFF)
+           .withOpacity(0.6))
+        ]),
+       child:StreamBuilder<PlayerState>(
+        stream:widget.pl.playerStateStream,
+        builder:(ctx,snap){
+         bool playing=snap.data?.playing
+          ??widget.pl.playing;
+         return IconButton(
+          iconSize:36,
+          icon:Icon(
+           playing
+            ?Icons.pause
+            :Icons.play_arrow,
+           color:Colors.black),
+          onPressed:widget.onPP);
+        })
+      ),
+      DeckLightRing(
+       isLive:widget.live,
+       isPlaying:widget.pl.playing,
+       child:const SizedBox(
+        width:190,height:190)),
+     ])),
+   const SizedBox(height:8),
+   Text(widget.na,
+    style:const TextStyle(fontSize:13),
+    maxLines:1,overflow:TextOverflow.ellipsis),
+   StreamBuilder<Duration>(
+    stream:widget.pl.positionStream,
+    builder:(c,s){
+     var p=s.data??Duration.zero;
+     var du=widget.pl.duration
+      ??const Duration(seconds:1);
+     var pr=du.inMilliseconds>0
+      ?p.inMilliseconds/du.inMilliseconds
+      :0.0;
+     String fmt(Duration dd)=>
+      '${dd.inMinutes.remainder(60)
+       .toString().padLeft(2,'0')}:'
+      '${dd.inSeconds.remainder(60)
+       .toString().padLeft(2,'0')}';
+     return Column(children:[
+      Slider(
+       value:pr.clamp(0.0,1.0),
+       min:0,max:1,
+       activeColor:widget.live
+        ?const Color(0xFFCEBBFF)
+        :Colors.white54,
+       onChanged:(v) async{
+        await widget.pl.seek(Duration(
+         milliseconds:
+          (v*du.inMilliseconds).toInt()));
+       }),
+      Text('${fmt(p)} / ${fmt(du)}',
+       style:const TextStyle(
+        fontSize:11,color:Colors.white38)),
+      Row(
+       mainAxisAlignment:
+        MainAxisAlignment.center,
+       children:[
+        IconButton(
+         icon:const Icon(Icons.skip_previous),
+         onPressed:widget.onPrev),
+        IconButton(
+         icon:const Icon(Icons.replay_10),
+         onPressed:()=>widget.onF(-10)),
+        IconButton(
+         icon:const Icon(Icons.folder_open),
+         onPressed:widget.onPk),
+        IconButton(
+         icon:const Icon(Icons.forward_10),
+         onPressed:()=>widget.onF(10)),
+        IconButton(
+         icon:const Icon(Icons.skip_next),
+         onPressed:widget.onNext),
+       ])
+     ]);
+    })
+  ]);
+ }
+}
