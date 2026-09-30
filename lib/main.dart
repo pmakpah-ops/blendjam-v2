@@ -97,8 +97,8 @@ Future _sx(double v)async{
 if(xf)return;xv=v;a.setVolume(1-v);b.setVolume(v);
 l=v>=0.5?D.b:D.a;setState((){});}
 void _qp(){
-showModalBottomSheet(context:context,builder:(c)=>
-Column(children:[
+showModalBottomSheet(context:context,builder:(c){
+return Column(children:[
 ListTile(title:Text('Q ${q.length}'),trailing:Row(
 mainAxisSize:MainAxisSize.min,children:[
 IconButton(icon:Icon(Icons.add),onPressed:()async{
@@ -106,8 +106,12 @@ await _aq();Navigator.pop(c);_qp();}),
 IconButton(icon:Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),
 Expanded(child:ListView.builder(itemCount:q.length,
 itemBuilder:(x,i)=>ListTile(title:Text(q[i].n),
-onTap:()async{Navigator.pop(x);await _ld(O(l),q[i]);})))
-])));}
+onTap:()async{
+Navigator.pop(x);
+await _ld(O(l),q[i]);
+})))
+]);
+});}
 Widget _dk(D d){
 var pl=P(d);
 return Column(children:[
@@ -147,4 +151,4 @@ Text('A'),Expanded(child:Slider(value:xv,min:0,max:1,onChanged:_sx)),
 Text('B')]),
 Text(xf?'MIXING ${(xv*100).toInt()}%':''),
 Expanded(child:_dk(D.b))
-])));}
+]));}
