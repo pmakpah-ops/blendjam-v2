@@ -87,14 +87,16 @@ class _S extends State<DJ>{
    await tp.seek(trim);await tp.setVolume(0.0);await tp.pause();
    const st=100;var dl=Duration(milliseconds:fadeT.inMilliseconds~/st);
    for(int i=1;i<=st;i++){var v=i/st;
-    if(i==10){try{await tp.play();}catch(_){}}
-    try{var sv=m.cos(v*m.pi/2),tv=m.sin(v*m.pi/2);
-     await sp.setVolume(sv);await tp.setVolume(tv);}catch(_){}
+    // FADER MOVES FIRST - trigger B at 10%
+    if(i==10){tp.play();} // NO await - this was the 9% freeze bug
     xfad=src==Deck.a?v:1.0-v;if(mounted) setState((){});
+    // volume fire-and-forget so it never blocks
+    try{var sv=m.cos(v*m.pi/2),tv=m.sin(v*m.pi/2);
+     sp.setVolume(sv);tp.setVolume(tv);}catch(_){}
     await Future.delayed(dl);}
   }catch(e){}finally{
-   try{await sp.setVolume(0.0);await tp.setVolume(1.0);
-    await sp.stop();await sp.seek(trim);await sp.pause();}catch(_){}
+   try{await sp.stop();await sp.seek(trim);
+    await sp.setVolume(0.0);await tp.setVolume(1.0);}catch(_){}
    SN(src,null);SA(src,null);live=tar;
    xfad=tar==Deck.a?0.0:1.0;xf=false;
    if(mounted) setState((){});if(auto) await _prep();}}
@@ -130,8 +132,8 @@ class _S extends State<DJ>{
   if(p<Duration.zero) p=Duration.zero;
   var du=pl.duration;if(du!=null&&p>du) p=du;await pl.seek(p);}
  Future _setX(double v) async{if(xf) return;xfad=v;
-  await pa.setVolume((1.0-v).clamp(0.0,1.0));
-  await pb.setVolume(v.clamp(0.0,1.0));
+  pa.setVolume((1.0-v).clamp(0.0,1.0));
+  pb.setVolume(v.clamp(0.0,1.0));
   live=v>=0.5?Deck.b:Deck.a;setState((){});}
  void _msg(String t){if(!mounted) return;
   ScaffoldMessenger.of(context)..hideCurrentSnackBar()
@@ -141,157 +143,4 @@ class _S extends State<DJ>{
    ListTile(title:Text('QUEUE ${q.length} LIVE:${N(live)??'--'}',
     style:const TextStyle(fontSize:13)),trailing:Row(
     mainAxisSize:MainAxisSize.min,children:[
-    IconButton(icon:const Icon(Icons.add),onPressed:() async{
-     await _aq();if(context.mounted) Navigator.pop(context);_queuePop();}),
-    IconButton(icon:const Icon(Icons.close),onPressed:()=>Navigator.pop(context))])),
-   const Divider(),
-   Expanded(child:ListView.builder(itemCount:q.length,
-    itemBuilder:(c,i){var isLive=N(live)==q[i].n;
-     var isNext=N(O(live))==q[i].n;
-     return ListTile(dense:true,
-      leading:Text('${i+1}',style:TextStyle(color:isLive?pu:null)),
-      title:Text(q[i].n,maxLines:1,overflow:TextOverflow.ellipsis,
-       style:TextStyle(fontSize:13,color:isLive?pu:isNext?Colors.orange:Colors.white)),
-      subtitle:isLive?const Text('▶ PLAYING ON DECK',style:TextStyle(fontSize:10,color:pu))
-       :isNext?const Text('NEXT UP',style:TextStyle(fontSize:10,color:Colors.orange)):null,
-      onTap:() async{Navigator.pop(c);await _load(live,q[i],livePlay:true);});}))])));}
- Widget _deck(Deck d,bool lift)=>DeckView(deck:d,player:P(d),
-  name:N(d)??'No track',art:A(d),live:live==d,
-  next:live!=d&&N(d)!=null,onPlay:()=>_tog(d),
-  onPick:()=>_pick(d),onPrev:()=>_prevD(d),
-  onNext:()=>_nextD(d),onSeek:(s)=>_seek(d,s),lift:lift);
- @override Widget build(c)=>Scaffold(
-  backgroundColor:Colors.black,
-  appBar:AppBar(backgroundColor:Colors.black,toolbarHeight:42,
-   title:const Text('BlendJam',style:TextStyle(fontSize:19)),
-   actions:[
-   const Text('AUTO',style:TextStyle(fontSize:11)),
-   Switch(value:auto,activeColor:pu,
-    onChanged:(v) async{setState(()=>auto=v);if(v) await _auto();}),
-   IconButton(icon:const Icon(Icons.queue_music,size:22),onPressed:_queuePop),
-   const SizedBox(width:2)]),
-  body:Column(children:[
-   Expanded(child:_deck(Deck.a,false)),
-   Padding(padding:const EdgeInsets.symmetric(horizontal:10),
-    child:Column(children:[
-     Row(children:[
-      const Text('A',style:TextStyle(fontSize:12)),
-      Expanded(child:Slider(value:xfad.clamp(0.0,1.0),min:0,max:1,activeColor:pu,onChanged:_setX)),
-      const Text('B',style:TextStyle(fontSize:12))]),
-     Text(xf?'MIXING ${(xfad*100).toInt()}% -> DECK ${live==Deck.a?'B':'A'}':'',
-      style:const TextStyle(color:pu,fontSize:11)),
-   ])),
-   Expanded(child:Padding(padding:const EdgeInsets.only(bottom:24),
-    child:_deck(Deck.b,true))),
-  ]));}
-
-class DeckView extends StatefulWidget{
- final Deck deck;final AudioPlayer player;
- final String name;final Uint8List? art;
- final bool live,next,lift;
- final VoidCallback onPlay,onPick,onPrev,onNext;
- final Future<void> Function(int) onSeek;
- const DeckView({super.key,required this.deck,
-  required this.player,required this.name,
-  required this.art,required this.live,
-  required this.next,required this.onPlay,
-  required this.onPick,required this.onPrev,
-  required this.onNext,required this.onSeek,required this.lift});
- @override State<DeckView> createState()=>_DV();}
-class _DV extends State<DeckView> with TickerProviderStateMixin{
- late AnimationController disc,ring;
- StreamSubscription<PlayerState>? subs;
- @override void initState(){super.initState();
-  disc=AnimationController(vsync:this,duration:const Duration(seconds:3));
-  ring=AnimationController(vsync:this,duration:const Duration(seconds:5));
-  subs=widget.player.playerStateStream.listen((s){
-   if(!mounted) return;bool has=widget.name!='No track';
-   if(s.playing&&has&&widget.live){disc.repeat();ring.repeat();}
-   else{disc.stop();ring.stop();}});}
- @override void didUpdateWidget(covariant DeckView old){
-  super.didUpdateWidget(old);bool has=widget.name!='No track';
-  if(!has||!widget.player.playing){disc.stop();ring.stop();}
-  else if(widget.live){disc.repeat();ring.repeat();}}
- @override void dispose(){subs?.cancel();disc.dispose();ring.dispose();super.dispose();}
- String _fmt(Duration d)=>'${d.inMinutes.remainder(60).toString().padLeft(2,'0')}:'
-  '${d.inSeconds.remainder(60).toString().padLeft(2,'0')}';
- Widget _discArt(){
-  Widget img;
-  if(widget.art!=null&&widget.art!.isNotEmpty){
-   img=Image.memory(widget.art!,width:130,height:130,fit:BoxFit.cover,gaplessPlayback:true);}
-  else{img=Image.asset('assets/images/default_cover.png',width:130,height:130,fit:BoxFit.cover);}
-  return Container(width:155,height:155,decoration:BoxDecoration(
-   shape:BoxShape.circle,color:Colors.black,
-   border:Border.all(color:widget.live?Colors.white24:Colors.white10,width:1)),
-   child:ClipOval(child:Stack(fit:StackFit.expand,children:[
-    img,CustomPaint(painter:_Grooves()),
-    Center(child:Container(width:60,height:60,
-     decoration:const BoxDecoration(shape:BoxShape.circle,color:Color(0xFF101010)),
-     child:Container(margin:const EdgeInsets.all(2),
-      decoration:BoxDecoration(shape:BoxShape.circle,
-       border:Border.all(color:widget.live?Color(0xFFCEBBFF):Colors.white24,width:1.2)))))])));}
-
- @override Widget build(c)=>Column(mainAxisAlignment:
-  widget.lift?MainAxisAlignment.start:MainAxisAlignment.center,children:[
-  Text('DECK ${widget.deck==Deck.a?'A':'B'} ${widget.live?'(LIVE)':widget.next?'(NEXT)':''}',
-   style:TextStyle(fontSize:11,fontWeight:FontWeight.bold,
-    color:widget.live?const Color(0xFFCEBBFF):Colors.white70)),
-  SizedBox(width:195,height:195,child:Stack(alignment:Alignment.center,children:[
-   RotationTransition(turns:ReverseTween(begin:0,end:1).animate(ring),
-    child:CustomPaint(size:const Size(195,195),
-     painter:_RingLight(isLive:widget.live,playing:widget.player.playing))),
-   RotationTransition(turns:disc,child:_discArt()),
-   StreamBuilder<bool>(stream:widget.player.playingStream,initialData:widget.player.playing,
-    builder:(ctx,snap){bool pl=snap.data??false;
-     return Material(color:Colors.transparent,shape:const CircleBorder(),
-      child:InkWell(customBorder:const CircleBorder(),onTap:widget.onPlay,
-       child:Container(width:54,height:54,alignment:Alignment.center,
-        decoration:BoxDecoration(shape:BoxShape.circle,color:const Color(0xFFCEBBFF),
-         boxShadow:[BoxShadow(blurRadius:10,color:const Color(0xFFCEBBFF).withOpacity(0.5))]),
-        child:Icon(pl?Icons.pause:Icons.play_arrow,size:30,color:Colors.black))));}),
-  ])),
-  const SizedBox(height:2),
-  Text(widget.name,style:const TextStyle(fontSize:11),maxLines:1,overflow:TextOverflow.ellipsis),
-  StreamBuilder<Duration>(stream:widget.player.positionStream,builder:(c,s){
-   var p=s.data??Duration.zero;var du=widget.player.duration;
-   var show=du??const Duration(seconds:1);if(p>show) show=p+const Duration(seconds:1);
-   double pr=show.inMilliseconds>0?p.inMilliseconds/show.inMilliseconds:0;pr=pr.clamp(0.0,1.0);
-   return Column(children:[SizedBox(height:20,child:Slider(value:pr,min:0,max:1,
-     activeColor:widget.live?const Color(0xFFCEBBFF):Colors.white38,
-     onChanged:(v) async{await widget.player.seek(Duration(
-      milliseconds:(v*show.inMilliseconds).round()));})),
-    Text('${_fmt(p)} / ${_fmt(du??Duration.zero)}',style:const TextStyle(fontSize:10,color:Colors.white38)),
-    Row(mainAxisAlignment:MainAxisAlignment.center,children:[
-     IconButton(iconSize:26,icon:const Icon(Icons.skip_previous),onPressed:widget.onPrev),
-     IconButton(iconSize:26,icon:const Icon(Icons.replay_10),onPressed:()=>widget.onSeek(-10)),
-     IconButton(iconSize:26,icon:const Icon(Icons.folder_open),onPressed:widget.onPick),
-     IconButton(iconSize:26,icon:const Icon(Icons.forward_10),onPressed:()=>widget.onSeek(10)),
-     IconButton(iconSize:26,icon:const Icon(Icons.skip_next),onPressed:widget.onNext)])]);})]);}
-
-class _RingLight extends CustomPainter{
- final bool isLive,playing;_RingLight({required this.isLive,required this.playing});
- @override void paint(Canvas cv,Size sz){
-  var ct=Offset(sz.width/2,sz.height/2);var rad=sz.width/2;
-  if(!isLive){cv.drawCircle(ct,rad,Paint()..style=PaintingStyle.stroke..strokeWidth=2
-..color=Colors.white12);return;}
-  var ringPaint=Paint()..style=PaintingStyle.stroke..strokeWidth=5
-..shader=SweepGradient(colors:const[
-    Color(0xFF087BFF),Color(0xFF111111),Color(0xFFFF7A00),
-    Color(0xFF111111),Color(0xFF087BFF)])
-.createShader(Rect.fromCircle(center:ct,radius:rad));
-  cv.drawCircle(ct,rad-2,ringPaint);
-  if(playing){var glow=Paint()..style=PaintingStyle.stroke..strokeWidth=12
-..color=const Color(0xFFCEBBFF).withOpacity(0.22)
-..maskFilter=const MaskFilter.blur(BlurStyle.normal,8);
-   cv.drawCircle(ct,rad-2,glow);}}
- @override bool shouldRepaint(covariant _RingLight o)=>o.isLive!=isLive||o.playing!=playing;}
-class _Grooves extends CustomPainter{
- @override void paint(Canvas cv,Size sz){
-  var ct=Offset(sz.width/2,sz.height/2);var rad=sz.width/2;
-  var p=Paint()..style=PaintingStyle.stroke..strokeWidth=1
-..color=Colors.white.withOpacity(0.06);
-  for(double r=20;r<rad-5;r+=5) cv.drawCircle(ct,r,p);}
- @override bool shouldRepaint(covariant CustomPainter old)=>false;}
-class ReverseTween extends Tween<double>{
- ReverseTween({required double begin,required double end}):super(begin:begin,end:end);
- @override double lerp(double t)=>super.lerp(1.0-t);}
+    IconButton(icon:const Icon(Icons.add),on
