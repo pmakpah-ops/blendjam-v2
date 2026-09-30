@@ -22,8 +22,7 @@ class _S extends State<DJ>{
  final pa=AudioPlayer(),pb=AudioPlayer();
  StreamSubscription<Duration>? sa,sb;
  StreamSubscription<PlayerState>? ca,cb;
- Timer? tk;
- String? na,nb;Uint8List? aa,ab;
+ Timer? tk;String? na,nb;Uint8List? aa,ab;
  Deck live=Deck.a;bool auto=false,xf=false;
  double xfad=0.0;List<Track> q=[];int qi=0;
  P(Deck d)=>d==Deck.a?pa:pb;
@@ -41,7 +40,6 @@ class _S extends State<DJ>{
    if(!mounted||xf||!auto) return;
    var pl=P(live);var du=pl.duration;if(du==null) return;
    var eff=du>trim?du-trim:du;var rem=eff-pl.position;
-   if(rem.inMilliseconds<=-2000) rem=Duration.zero;
    if(rem<=fadeT&&N(O(live))!=null){_fade(O(live));}
    else if(rem<=preT&&N(O(live))==null){_prep();}});}
  @override void dispose(){
@@ -50,30 +48,27 @@ class _S extends State<DJ>{
   super.dispose();}
  void _done(Deck d,PlayerState s){
   if(s.processingState==ProcessingState.completed){
+   if(d==live&&N(O(d))!=null&&!xf){_fade(O(d));return;}
    if(d!=live){SN(d,null);SA(d,null);setState((){});return;}
-   if(N(O(d))!=null&&!xf){_fade(O(d));}
-   else{SN(d,null);SA(d,null);setState((){});}}}
+   if(d==live&&N(O(d))==null){SN(d,null);SA(d,null);setState((){});}}}
  Track? _next(){if(q.isEmpty) return null;
   var t=q[qi%q.length];qi=(qi+1)%q.length;return t;}
  Future<Uint8List?> _art(String p) async{try{
    var t=await AudioTags.read(p);
-   if(t!=null&&t.pictures.isNotEmpty)
-    return t.pictures.first.bytes;
+   if(t!=null&&t.pictures.isNotEmpty) return t.pictures.first.bytes;
   }catch(_){}return null;}
  Future<bool> _load(Deck d,Track t,{bool livePlay=false}) async{
   var pl=P(d);SN(d,t.n);SA(d,null);setState((){});
   try{await pl.stop();await pl.setFilePath(t.p);
-   var du=pl.duration;Duration st=Duration.zero;
-   if(du!=null&&du>trim) st=trim;
+   var du=pl.duration;var st=du!=null&&du>trim?trim:Duration.zero;
    await pl.seek(st);await pl.setVolume(d==live?1.0:0.0);
    if(livePlay&&d==live) await pl.play();else await pl.pause();
   }catch(e){_msg('Load fail');return false;}
-  _art(t.p).then((i){if(!mounted) return;SA(d,i);setState((){});});
+  _art(t.p).then((i){if(mounted){SA(d,i);setState((){});}});
   setState((){});return true;}
  Future _prep() async{if(q.isEmpty||xf) return;
-  var nd=O(live);if(N(nd)!=null) return;
-  var nx=_next();if(nx==null) return;
-  await _load(nd,nx,livePlay:false);}
+  if(N(O(live))!=null) return;var nx=_next();if(nx==null) return;
+  await _load(O(live),nx,livePlay:false);}
  Future _auto() async{if(q.isEmpty){_msg('Add music');return;}
   if(N(live)==null){var f=_next();if(f==null) return;
    await _load(live,f,livePlay:true);}else{
@@ -83,31 +78,26 @@ class _S extends State<DJ>{
   if(d!=live) return;var pl=P(d);if(!pl.playing) return;
   var du=pl.duration;if(du==null) return;
   var eff=du>trim?du-trim:du;var rem=eff-p;
-  if(rem.inMilliseconds<=-1500) rem=Duration.zero;
-  if(rem<=preT&&rem>=Duration.zero&&N(O(d))==null){
-   unawaited(_prep());}
-  if(rem<=fadeT&&rem>=Duration.zero&&N(O(d))!=null){
-   unawaited(_fade(O(d)));}}
+  if(rem<=preT&&rem>=Duration.zero&&N(O(d))==null) _prep();
+  if(rem<=fadeT&&rem>=Duration.zero&&N(O(d))!=null) _fade(O(d));}
  Future _fade(Deck tar) async{if(xf||N(tar)==null) return;
   var src=live;if(src==tar) return;var sp=P(src),tp=P(tar);
   xf=true;setState((){});
   try{
-   // FADER MOVES FIRST - then trigger B
    await tp.seek(trim);await tp.setVolume(0.0);await tp.pause();
    const st=100;var dl=Duration(milliseconds:fadeT.inMilliseconds~/st);
    for(int i=1;i<=st;i++){var v=i/st;
-    // start B at 10% fader
-    if(i==10){await tp.play();}
-    var sv=m.cos(v*m.pi/2),tv=m.sin(v*m.pi/2);
-    await sp.setVolume(sv);await tp.setVolume(tv);
+    if(i==10){try{await tp.play();}catch(_){}}
+    try{var sv=m.cos(v*m.pi/2),tv=m.sin(v*m.pi/2);
+     await sp.setVolume(sv);await tp.setVolume(tv);}catch(_){}
     xfad=src==Deck.a?v:1.0-v;if(mounted) setState((){});
     await Future.delayed(dl);}
-   await sp.setVolume(0.0);await tp.setVolume(1.0);
-   await sp.stop();await sp.seek(trim);await sp.pause();
+  }catch(e){}finally{
+   try{await sp.setVolume(0.0);await tp.setVolume(1.0);
+    await sp.stop();await sp.seek(trim);await sp.pause();}catch(_){}
    SN(src,null);SA(src,null);live=tar;
-  }catch(e){try{await tp.setVolume(1.0);}catch(_){}}
-  finally{xf=false;if(mounted) setState((){});
-   if(auto) await _prep();}}
+   xfad=tar==Deck.a?0.0:1.0;xf=false;
+   if(mounted) setState((){});if(auto) await _prep();}}
  Future _tog(Deck d) async{if(xf) return;var pl=P(d);
   try{if(pl.playing){await pl.pause();setState((){});return;}
    if(N(d)==null){if(q.isEmpty){_msg('Add file');return;}
@@ -120,36 +110,32 @@ class _S extends State<DJ>{
    if(auto) await _prep();setState((){});
   }catch(e){_msg('Play err');}}
  Future _pick(Deck d) async{var r=await FilePicker.platform
- .pickFiles(type:FileType.audio);if(r==null) return;
+.pickFiles(type:FileType.audio);if(r==null) return;
   var p=r.files.single.path;if(p==null) return;
   await _load(d,Track(p,r.files.single.name),livePlay:true);
   live=d;if(auto) await _prep();setState((){});}
  Future _aq() async{var r=await FilePicker.platform.pickFiles(
    type:FileType.audio,allowMultiple:true);if(r==null) return;
   var ts=r.files.where((f)=>f.path!=null)
- .map((f)=>Track(f.path!,f.name)).toList();
+.map((f)=>Track(f.path!,f.name)).toList();
   if(ts.isEmpty) return;setState(()=>q.addAll(ts));
   if(auto) await _auto();}
  Future _nextD(Deck d) async{if(q.isEmpty||xf) return;
-  var t=_next();if(t==null) return;
-  await _load(d,t,livePlay:d==live);}
+  var t=_next();if(t==null) return;await _load(d,t,livePlay:d==live);}
  Future _prevD(Deck d) async{if(q.isEmpty||xf) return;
   qi=(qi-2+q.length)%q.length;var t=q[qi%q.length];
   qi=(qi+1)%q.length;await _load(d,t,livePlay:d==live);}
  Future _seek(Deck d,int s) async{var pl=P(d);
   var p=pl.position+Duration(seconds:s);
   if(p<Duration.zero) p=Duration.zero;
-  var du=pl.duration;if(du!=null&&p>du) p=du;
-  await pl.seek(p);}
+  var du=pl.duration;if(du!=null&&p>du) p=du;await pl.seek(p);}
  Future _setX(double v) async{if(xf) return;xfad=v;
   await pa.setVolume((1.0-v).clamp(0.0,1.0));
   await pb.setVolume(v.clamp(0.0,1.0));
-  live=v>=0.5?Deck.b:Deck.a;
-  if(P(O(live)).playing) await P(O(live)).pause();
-  setState((){});}
+  live=v>=0.5?Deck.b:Deck.a;setState((){});}
  void _msg(String t){if(!mounted) return;
   ScaffoldMessenger.of(context)..hideCurrentSnackBar()
- ..showSnackBar(SnackBar(content:Text(t)));}
+..showSnackBar(SnackBar(content:Text(t)));}
  void _queuePop(){showModalBottomSheet(context:context,
   builder:(ctx)=>SafeArea(child:Column(children:[
    ListTile(title:Text('QUEUE ${q.length} LIVE:${N(live)??'--'}',
@@ -186,16 +172,16 @@ class _S extends State<DJ>{
    const SizedBox(width:2)]),
   body:Column(children:[
    Expanded(child:_deck(Deck.a,false)),
-   Padding(padding:const EdgeInsets.symmetric(horizontal:10,vertical:2),
+   Padding(padding:const EdgeInsets.symmetric(horizontal:10),
     child:Column(children:[
      Row(children:[
       const Text('A',style:TextStyle(fontSize:12)),
       Expanded(child:Slider(value:xfad.clamp(0.0,1.0),min:0,max:1,activeColor:pu,onChanged:_setX)),
       const Text('B',style:TextStyle(fontSize:12))]),
-     Text(xf?'MIXING ${(xfad*100).toInt()}% -> DECK ${O(live)==Deck.a?'A':'B'}':'',
+     Text(xf?'MIXING ${(xfad*100).toInt()}% -> DECK ${live==Deck.a?'B':'A'}':'',
       style:const TextStyle(color:pu,fontSize:11)),
-     const Text('DECK B (NEXT)',style:TextStyle(fontSize:10,color:Colors.white54)) ])),
-   Expanded(child:Padding(padding:const EdgeInsets.only(bottom:18),
+   ])),
+   Expanded(child:Padding(padding:const EdgeInsets.only(bottom:24),
     child:_deck(Deck.b,true))),
   ]));}
 
@@ -221,14 +207,11 @@ class _DV extends State<DeckView> with TickerProviderStateMixin{
   subs=widget.player.playerStateStream.listen((s){
    if(!mounted) return;bool has=widget.name!='No track';
    if(s.playing&&has&&widget.live){disc.repeat();ring.repeat();}
-   else if(s.playing&&has&&widget.next){disc.stop();ring.stop();}
-   else if(!s.playing){disc.stop();ring.stop();}});}
+   else{disc.stop();ring.stop();}});}
  @override void didUpdateWidget(covariant DeckView old){
-  super.didUpdateWidget(old);
-  bool has=widget.name!='No track';
-  if(!has){disc.stop();ring.stop();}
-  else if(widget.player.playing&&widget.live){disc.repeat();ring.repeat();}
-  else{disc.stop();if(widget.live) ring.stop();}}
+  super.didUpdateWidget(old);bool has=widget.name!='No track';
+  if(!has||!widget.player.playing){disc.stop();ring.stop();}
+  else if(widget.live){disc.repeat();ring.repeat();}}
  @override void dispose(){subs?.cancel();disc.dispose();ring.dispose();super.dispose();}
  String _fmt(Duration d)=>'${d.inMinutes.remainder(60).toString().padLeft(2,'0')}:'
   '${d.inSeconds.remainder(60).toString().padLeft(2,'0')}';
@@ -250,7 +233,6 @@ class _DV extends State<DeckView> with TickerProviderStateMixin{
 
  @override Widget build(c)=>Column(mainAxisAlignment:
   widget.lift?MainAxisAlignment.start:MainAxisAlignment.center,children:[
-  const SizedBox(height:2),
   Text('DECK ${widget.deck==Deck.a?'A':'B'} ${widget.live?'(LIVE)':widget.next?'(NEXT)':''}',
    style:TextStyle(fontSize:11,fontWeight:FontWeight.bold,
     color:widget.live?const Color(0xFFCEBBFF):Colors.white70)),
@@ -272,8 +254,7 @@ class _DV extends State<DeckView> with TickerProviderStateMixin{
   Text(widget.name,style:const TextStyle(fontSize:11),maxLines:1,overflow:TextOverflow.ellipsis),
   StreamBuilder<Duration>(stream:widget.player.positionStream,builder:(c,s){
    var p=s.data??Duration.zero;var du=widget.player.duration;
-   var show=du??const Duration(seconds:1);
-   if(p>show) show=p+const Duration(seconds:1);
+   var show=du??const Duration(seconds:1);if(p>show) show=p+const Duration(seconds:1);
    double pr=show.inMilliseconds>0?p.inMilliseconds/show.inMilliseconds:0;pr=pr.clamp(0.0,1.0);
    return Column(children:[SizedBox(height:20,child:Slider(value:pr,min:0,max:1,
      activeColor:widget.live?const Color(0xFFCEBBFF):Colors.white38,
@@ -292,7 +273,7 @@ class _RingLight extends CustomPainter{
  @override void paint(Canvas cv,Size sz){
   var ct=Offset(sz.width/2,sz.height/2);var rad=sz.width/2;
   if(!isLive){cv.drawCircle(ct,rad,Paint()..style=PaintingStyle.stroke..strokeWidth=2
- ..color=Colors.white12);return;}
+..color=Colors.white12);return;}
   var ringPaint=Paint()..style=PaintingStyle.stroke..strokeWidth=5
 ..shader=SweepGradient(colors:const[
     Color(0xFF087BFF),Color(0xFF111111),Color(0xFFFF7A00),
@@ -300,8 +281,8 @@ class _RingLight extends CustomPainter{
 .createShader(Rect.fromCircle(center:ct,radius:rad));
   cv.drawCircle(ct,rad-2,ringPaint);
   if(playing){var glow=Paint()..style=PaintingStyle.stroke..strokeWidth=12
- ..color=const Color(0xFFCEBBFF).withOpacity(0.22)
- ..maskFilter=const MaskFilter.blur(BlurStyle.normal,8);
+..color=const Color(0xFFCEBBFF).withOpacity(0.22)
+..maskFilter=const MaskFilter.blur(BlurStyle.normal,8);
    cv.drawCircle(ct,rad-2,glow);}}
  @override bool shouldRepaint(covariant _RingLight o)=>o.isLive!=isLive||o.playing!=playing;}
 class _Grooves extends CustomPainter{
