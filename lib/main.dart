@@ -74,14 +74,16 @@ class _S extends State<DJ>{
   if(d!=live) return;var pl=P(d);if(!pl.playing) return;
   var du=pl.duration;if(du==null) return;
   var rem=du-p;
-  if(rem<=preT&&N(O(d))==null&&auto&&q.isNotEmpty){
+  if(rem<=preT&&rem>Duration.zero&&
+   N(O(d))==null&&auto&&q.isNotEmpty){
    unawaited(_prep());}
-  if(rem<=fadeT&&N(O(d))!=null){
+  if(rem<=fadeT&&rem>Duration.zero&&N(O(d))!=null){
    unawaited(_fade(O(d)));}}
  Future _fade(Deck tar) async{if(xf) return;
   if(N(tar)==null) return;var src=live;
   if(src==tar) return;var sp=P(src),tp=P(tar);
-  xf=true;try{
+  xf=true;setState((){});
+  try{
    await tp.seek(trim);await tp.setVolume(0.0);
    await tp.play();
    const st=100;
@@ -95,14 +97,15 @@ class _S extends State<DJ>{
    await sp.setVolume(0.0);await tp.setVolume(1.0);
    await sp.stop();await sp.seek(trim);await sp.pause();
    SN(src,null);SA(src,null);live=tar;
-  }catch(e){_msg('Crossfade failed');}
-  finally{xf=false;setState((){});if(auto) await _prep();}}
+  }catch(e){await tp.setVolume(1.0);}
+  finally{xf=false;if(mounted) setState((){});
+   if(auto) await _prep();}}
  Future _tog(Deck d) async{if(xf) return;var pl=P(d);
   try{if(pl.playing){await pl.pause();setState((){});return;}
    if(N(d)==null){if(q.isEmpty){_msg('Add file');return;}
     var t=_next();if(t==null) return;
     await _load(d,t,play:true);return;}
-   if(d!=live&&N(live)!=null&&N(d)!=null){
+   if(d!=live&&N(d)!=null){
     await _fade(d);return;}
    live=d;xfad=d==Deck.a?0.0:1.0;
    await P(O(d)).setVolume(0.0);
@@ -110,14 +113,14 @@ class _S extends State<DJ>{
    if(auto) await _prep();setState((){});
   }catch(e){_msg('Play err');}}
  Future _pick(Deck d) async{var r=await FilePicker.platform
-   .pickFiles(type:FileType.audio);if(r==null) return;
+  .pickFiles(type:FileType.audio);if(r==null) return;
   var p=r.files.single.path;if(p==null) return;
   await _load(d,Track(p,r.files.single.name),play:true);
   live=d;if(auto) await _prep();setState((){});}
  Future _aq() async{var r=await FilePicker.platform.pickFiles(
    type:FileType.audio,allowMultiple:true);if(r==null) return;
   var ts=r.files.where((f)=>f.path!=null)
-   .map((f)=>Track(f.path!,f.name)).toList();
+  .map((f)=>Track(f.path!,f.name)).toList();
   if(ts.isEmpty) return;setState(()=>q.addAll(ts));
   if(auto) await _auto();}
  Future _nextD(Deck d) async{if(q.isEmpty||xf) return;
@@ -137,35 +140,60 @@ class _S extends State<DJ>{
   live=v>=0.5?Deck.b:Deck.a;setState((){});}
  void _msg(String t){if(!mounted) return;
   ScaffoldMessenger.of(context)..hideCurrentSnackBar()
-   ..showSnackBar(SnackBar(content:Text(t)));}
+  ..showSnackBar(SnackBar(content:Text(t)));}
+ void _queuePop(){showModalBottomSheet(context:context,
+  builder:(ctx)=>SafeArea(child:Column(children:[
+   ListTile(title:Text('QUEUE ${q.length}'),
+    trailing:Row(mainAxisSize:MainAxisSize.min,children:[
+     IconButton(icon:const Icon(Icons.add),
+      onPressed:() async{await _aq();if(context.mounted)
+       Navigator.pop(context);_queuePop();}),
+     IconButton(icon:const Icon(Icons.close),
+      onPressed:()=>Navigator.pop(context)) ])),
+   const Divider(),
+   Expanded(child:ListView.builder(itemCount:q.length,
+    itemBuilder:(c,i){var isCur=q[i].n==na||q[i].n==nb;
+     return ListTile(dense:true,
+      leading:Text('${i+1}',style:TextStyle(
+       color:isCur?pu:null)),
+      title:Text(q[i].n,maxLines:1,
+       overflow:TextOverflow.ellipsis,
+       style:TextStyle(fontSize:13,
+        color:isCur?pu:Colors.white,
+        fontWeight:isCur?FontWeight.bold:null)),
+      trailing:isCur?const Icon(Icons.play_arrow,
+       color:pu,size:18):null,
+      onTap:() async{Navigator.pop(c);
+       await _load(live,q[i],play:true);});}))])));}
  Widget _deck(Deck d)=>DeckView(deck:d,player:P(d),
   name:N(d)??'No track',art:A(d),live:live==d,
   next:live!=d&&N(d)!=null,onPlay:()=>_tog(d),
   onPick:()=>_pick(d),onPrev:()=>_prevD(d),
   onNext:()=>_nextD(d),onSeek:(s)=>_seek(d,s));
  @override Widget build(c)=>Scaffold(
-  appBar:AppBar(title:const Text('BlendJam',
-   style:TextStyle(fontSize:26)),actions:[
-   const Text('AUTO'),Switch(value:auto,activeColor:pu,
+  appBar:AppBar(toolbarHeight:48,
+   title:const Text('BlendJam',style:TextStyle(fontSize:20)),
+   actions:[
+   const Text('AUTO',style:TextStyle(fontSize:12)),
+   Switch(value:auto,activeColor:pu,
     onChanged:(v) async{setState(()=>auto=v);
      if(v) await _auto();}),
-   const SizedBox(width:8)]),
-  body:ListView(padding:const EdgeInsets.all(14),children:[
-   _deck(Deck.a),const SizedBox(height:4),
-   Row(children:[const Text('A'),Expanded(child:Slider(
-     value:xfad.clamp(0.0,1.0),min:0,max:1,
-     activeColor:pu,onChanged:_setX)),const Text('B')]),
-   Center(child:Text(xf?'MIXING ${(xfad*100).toInt()}%':'',
-    style:const TextStyle(color:pu))),
-   const SizedBox(height:8),_deck(Deck.b),
-   const SizedBox(height:12),
-   Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
-    Text('QUEUE ${q.length}'),IconButton(
-     icon:const Icon(Icons.add_circle),onPressed:_aq)]),
-   ...q.asMap().entries.map((e)=>ListTile(dense:true,
-    leading:Text('${e.key+1}'),title:Text(e.value.n,
-     maxLines:1,overflow:TextOverflow.ellipsis,
-     style:const TextStyle(fontSize:13)))) ]));}
+   IconButton(icon:const Icon(Icons.queue_music),
+    onPressed:_queuePop),
+   const SizedBox(width:4)]),
+  body:Column(children:[
+   Expanded(child:Row(children:[
+    Expanded(child:_deck(Deck.a)),
+    Expanded(child:_deck(Deck.b)) ])),
+   Padding(padding:const EdgeInsets.symmetric(
+    horizontal:12,vertical:2),child:Row(children:[
+    const Text('A',style:TextStyle(fontSize:11)),
+    Expanded(child:Slider(value:xfad.clamp(0.0,1.0),
+     min:0,max:1,activeColor:pu,onChanged:_setX)),
+    const Text('B',style:TextStyle(fontSize:11)) ])),
+   Text(xf?'MIXING ${(xfad*100).toInt()}%':'',
+    style:const TextStyle(color:pu,fontSize:11)),
+   const SizedBox(height:2)]));}
 
 class DeckView extends StatefulWidget{
  final Deck deck;final AudioPlayer player;
@@ -181,105 +209,119 @@ class DeckView extends StatefulWidget{
   required this.onNext,required this.onSeek});
  @override State<DeckView> createState()=>_DV();}
 class _DV extends State<DeckView>
- with SingleTickerProviderStateMixin{
- late AnimationController rot;
+ with TickerProviderStateMixin{
+ late AnimationController disc,ring;
  StreamSubscription<PlayerState>? subs;
  @override void initState(){super.initState();
-  rot=AnimationController(vsync:this,
+  disc=AnimationController(vsync:this,
    duration:const Duration(seconds:3));
+  ring=AnimationController(vsync:this,
+   duration:const Duration(seconds:6));
   subs=widget.player.playerStateStream.listen((s){
-   if(!mounted) return;if(s.playing) rot.repeat();
-   else rot.stop();});}
- @override void dispose(){subs?.cancel();rot.dispose();super.dispose();}
+   if(!mounted) return;
+   bool has=widget.name!='No track';
+   if(s.playing&&has){disc.repeat();ring.repeat();}
+   else{disc.stop();ring.stop();}});}
+ @override void didUpdateWidget(covariant DeckView old){
+  super.didUpdateWidget(old);
+  if(old.name!=widget.name||old.live!=widget.live){
+   if(!widget.live||widget.name=='No track'){
+    disc.stop();ring.stop();}}}
+ @override void dispose(){
+  subs?.cancel();disc.dispose();ring.dispose();
+  super.dispose();}
  String _fmt(Duration d)=>'${d.inMinutes.remainder(60).toString().padLeft(2,'0')}:'
   '${d.inSeconds.remainder(60).toString().padLeft(2,'0')}';
  Widget _discArt(){
   Widget img;
   if(widget.art!=null&&widget.art!.isNotEmpty){
-   img=Image.memory(widget.art!,width:160,height:160,
+   img=Image.memory(widget.art!,width:130,height:130,
     fit:BoxFit.cover,gaplessPlayback:true);}
   else{
    img=Image.asset('assets/images/default_cover.png',
-    width:160,height:160,fit:BoxFit.cover);}
-  return Container(width:190,height:190,
+    width:130,height:130,fit:BoxFit.cover);}
+  return Container(width:150,height:150,
    decoration:BoxDecoration(shape:BoxShape.circle,
     color:Colors.black,
-    border:Border.all(color:widget.live?Colors.white24:Colors.white12,width:1)),
+    border:Border.all(color:widget.live?Colors.white24:Colors.white10,width:1)),
    child:ClipOval(child:Stack(fit:StackFit.expand,children:[
-    img,
-    // grooves overlay so art doesn't look flat
-    CustomPaint(painter:_Grooves()),
-    Center(child:Container(width:74,height:74,
+    img,CustomPaint(painter:_Grooves()),
+    Center(child:Container(width:60,height:60,
      decoration:const BoxDecoration(shape:BoxShape.circle,color:Color(0xFF101010)),
-     child:Container(margin:const EdgeInsets.all(3),
+     child:Container(margin:const EdgeInsets.all(2),
       decoration:BoxDecoration(shape:BoxShape.circle,
-       border:Border.all(color:widget.live?Color(0xFFCEBBFF):Colors.white24,width:1.5)))))])));}
+       border:Border.all(color:widget.live?Color(0xFFCEBBFF):Colors.white24,width:1)))))])));}
 
  @override Widget build(c)=>Column(children:[
   Text('DECK ${widget.deck==Deck.a?'A':'B'} '
    '${widget.live?'(LIVE)':widget.next?'(NEXT)':''}',
-   style:TextStyle(fontWeight:FontWeight.bold,
+   style:TextStyle(fontSize:11,fontWeight:FontWeight.bold,
     color:widget.live?const Color(0xFFCEBBFF):Colors.white70)),
-  const SizedBox(height:8),
-  SizedBox(width:230,height:230,
+  const SizedBox(height:4),
+  SizedBox(width:180,height:180,
    child:Stack(alignment:Alignment.center,children:[
-    // RESTORED RING LIGHT - sharp blue/orange blend, 230 allowance
-    CustomPaint(size:const Size(230,230),
-     painter:_RingLight(isLive:widget.live,playing:widget.player.playing)),
-    RotationTransition(turns:rot,child:_discArt()),
+    RotationTransition(turns:ReverseTween(begin:0,end:1).animate(ring),
+     child:CustomPaint(size:const Size(180,180),
+      painter:_RingLight(isLive:widget.live,
+       playing:widget.player.playing))),
+    RotationTransition(turns:disc,child:_discArt()),
     StreamBuilder<bool>(stream:widget.player.playingStream,
      initialData:widget.player.playing,
      builder:(ctx,snap){bool pl=snap.data??false;
       return Material(color:Colors.transparent,shape:const CircleBorder(),
        child:InkWell(customBorder:const CircleBorder(),
-        onTap:widget.onPlay,child:Container(width:68,height:68,
+        onTap:widget.onPlay,child:Container(width:52,height:52,
          alignment:Alignment.center,decoration:BoxDecoration(
           shape:BoxShape.circle,color:const Color(0xFFCEBBFF),
-          boxShadow:[BoxShadow(blurRadius:12,
-           color:const Color(0xFFCEBBFF).withOpacity(0.6))]),
+          boxShadow:[BoxShadow(blurRadius:10,
+           color:const Color(0xFFCEBBFF).withOpacity(0.5))]),
          child:Icon(pl?Icons.pause:Icons.play_arrow,
-          size:38,color:Colors.black))));}),
+          size:28,color:Colors.black))));}),
   ])),
-  const SizedBox(height:8),
-  Text(widget.name,style:const TextStyle(fontSize:13),
+  const SizedBox(height:4),
+  Text(widget.name,style:const TextStyle(fontSize:10),
    maxLines:1,overflow:TextOverflow.ellipsis),
   StreamBuilder<Duration>(stream:widget.player.positionStream,
    builder:(c,s){var p=s.data??Duration.zero;
     var du=widget.player.duration??const Duration(seconds:1);
     double pr=du.inMilliseconds>0?p.inMilliseconds/du.inMilliseconds:0;
     pr=pr.clamp(0.0,1.0);
-    return Column(children:[Slider(value:pr,min:0,max:1,
-      activeColor:widget.live?const Color(0xFFCEBBFF):Colors.white54,
-      onChanged:(v) async{await widget.player.seek(Duration(
-       milliseconds:(v*du.inMilliseconds).round()));}),
+    return Column(children:[SizedBox(height:16,
+      child:Slider(value:pr,min:0,max:1,
+       activeColor:widget.live?const Color(0xFFCEBBFF):Colors.white38,
+       onChanged:(v) async{await widget.player.seek(Duration(
+        milliseconds:(v*du.inMilliseconds).round()));})),
      Text('${_fmt(p)} / ${_fmt(du)}',style:const TextStyle(
-      fontSize:11,color:Colors.white38)),
+      fontSize:9,color:Colors.white38)),
      Row(mainAxisAlignment:MainAxisAlignment.center,children:[
-      IconButton(icon:const Icon(Icons.skip_previous),onPressed:widget.onPrev),
-      IconButton(icon:const Icon(Icons.replay_10),onPressed:()=>widget.onSeek(-10)),
-      IconButton(icon:const Icon(Icons.folder_open),onPressed:widget.onPick),
-      IconButton(icon:const Icon(Icons.forward_10),onPressed:()=>widget.onSeek(10)),
-      IconButton(icon:const Icon(Icons.skip_next),onPressed:widget.onNext)])]);})]);}
+      SizedBox(width:26,child:IconButton(iconSize:16,
+       icon:const Icon(Icons.skip_previous),onPressed:widget.onPrev)),
+      SizedBox(width:26,child:IconButton(iconSize:16,
+       icon:const Icon(Icons.replay_10),onPressed:()=>widget.onSeek(-10))),
+      SizedBox(width:26,child:IconButton(iconSize:16,
+       icon:const Icon(Icons.folder_open),onPressed:widget.onPick)),
+      SizedBox(width:26,child:IconButton(iconSize:16,
+       icon:const Icon(Icons.forward_10),onPressed:()=>widget.onSeek(10))),
+      SizedBox(width:26,child:IconButton(iconSize:16,
+       icon:const Icon(Icons.skip_next),onPressed:widget.onNext))])]);})]);}
 
 class _RingLight extends CustomPainter{
  final bool isLive,playing;_RingLight({required this.isLive,required this.playing});
  @override void paint(Canvas cv,Size sz){
   var ct=Offset(sz.width/2,sz.height/2);
   var rad=sz.width/2;
-  if(!isLive){ // idle = thin dim ring
+  if(!isLive){
    cv.drawCircle(ct,rad,Paint()..style=PaintingStyle.stroke..strokeWidth=2
-    ..color=Colors.white12);return;}
-  // LIVE = sharp blend blue/orange with glow
+   ..color=Colors.white12);return;}
   var ringPaint=Paint()..style=PaintingStyle.stroke..strokeWidth=4
-   ..shader=SweepGradient(colors:const[
+  ..shader=SweepGradient(colors:const[
     Color(0xFF087BFF),Color(0xFF111111),
     Color(0xFFFF7A00),Color(0xFF111111),Color(0xFF087BFF)])
-   .createShader(Rect.fromCircle(center:ct,radius:rad));
+  .createShader(Rect.fromCircle(center:ct,radius:rad));
   cv.drawCircle(ct,rad-2,ringPaint);
-  // outer glow
   if(playing){
    var glow=Paint()..style=PaintingStyle.stroke..strokeWidth=10
-    ..color=const Color(0xFFCEBBFF).withOpacity(0.25)..maskFilter=
+   ..color=const Color(0xFFCEBBFF).withOpacity(0.22)..maskFilter=
      const MaskFilter.blur(BlurStyle.normal,8);
    cv.drawCircle(ct,rad-2,glow);}}
  @override bool shouldRepaint(covariant _RingLight o)=>
@@ -289,6 +331,11 @@ class _Grooves extends CustomPainter{
  @override void paint(Canvas cv,Size sz){
   var ct=Offset(sz.width/2,sz.height/2);var rad=sz.width/2;
   var p=Paint()..style=PaintingStyle.stroke..strokeWidth=1
-   ..color=Colors.white.withOpacity(0.06);
-  for(double r=25;r<rad-5;r+=6) cv.drawCircle(ct,r,p);}
+  ..color=Colors.white.withOpacity(0.06);
+  for(double r=20;r<rad-5;r+=5) cv.drawCircle(ct,r,p);}
  @override bool shouldRepaint(covariant CustomPainter old)=>false;}
+
+class ReverseTween extends Tween<double>{
+ ReverseTween({required double begin,required double end})
+  :super(begin:begin,end:end);
+ @override double lerp(double t)=>super.lerp(1.0-t);}
