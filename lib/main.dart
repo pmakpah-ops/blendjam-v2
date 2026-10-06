@@ -31,7 +31,53 @@ if(p!=null){await _ld(d,T(p,r.files.single.name),lp:true);l=d;setState((){});}}
 Future _aq()async{var r=await FilePicker.platform.pickFiles(type:FileType.audio,allowMultiple:true);if(r==null)return;
 setState(()=>q.addAll(r.files.where((f)=>f.path!=null).map((f)=>T(f.path!,f.name))));if(au)await _au();}
 Future _sx(double v)async{if(xf)return;xv=v;a.setVolume(1-v);b.setVolume(v);l=v>=0.5?D.b:D.a;setState((){});}
-void _qp(){showModalBottomSheet(context:context,builder:(c)=>SafeArea(child:Column(children:[ListTile(title:Text('QUEUE ${q.length}'),
-trailing:Row(mainAxisSize:MainAxisSize.min,children:[IconButton(icon:Icon(Icons.add),onPressed:()async{await _aq();Navigator.pop(c);_qp();}),
-IconButton(icon:Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),Expanded(child:ListView.builder(itemCount:q.length,itemBuilder:(x,i){
-var live=N(l)==q[i].n;return ListTile(dense
+void _qp(){showModalBottomSheet(context:context,builder:(c){return SafeArea(child:Column(children:[
+ListTile(title:Text('QUEUE ${q.length}'),trailing:Row(mainAxisSize:MainAxisSize.min,children:[
+IconButton(icon:Icon(Icons.add),onPressed:()async{await _aq();Navigator.pop(c);_qp();}),
+IconButton(icon:Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),
+Expanded(child:ListView.builder(itemCount:q.length,itemBuilder:(x,i){
+var live=N(l)==q[i].n;return ListTile(dense:true,title:Text(q[i].n,overflow:TextOverflow.ellipsis,style:TextStyle(color:live?C:Colors.white)),onTap:()async{Navigator.pop(c);await _ld(O(l),q[i]);});}))]));});}
+Widget _dk(D d,bool up)=>Deck(deck:d,pl:P(d),name:N(d)??'No track',art:A(d),live:l==d,next:N(d)!=null&&l!=d,onPlay:()=>_tg(d),onPick:()=>_pk(d),onSeek:(s)async=>await P(d).seek(P(d).position+Duration(seconds:s)),lift:up);
+@override Widget build(BuildContext c)=>Scaffold(backgroundColor:Colors.black,appBar:AppBar(backgroundColor:Colors.black,title:Text('BlendJam'),
+actions:[Text('AUTO'),Switch(value:au,activeColor:C,onChanged:(v)async{setState(()=>au=v);if(v)await _au();}),IconButton(icon:Icon(Icons.queue_music),onPressed:_qp)]),
+body:Column(children:[Expanded(child:_dk(D.a,false)),Padding(padding:EdgeInsets.symmetric(horizontal:10),child:Column(children:[
+Row(children:[Text('A'),Expanded(child:Slider(value:xv,min:0,max:1,activeColor:C,onChanged:_sx)),Text('B')]),
+Text(xf?'MIXING ${(xv*100).toInt()}% -> DECK ${l==D.a?'A':'B'}':'',style:TextStyle(color:C,fontSize:11))])),Expanded(child:_dk(D.b,true))]));}
+class Deck extends StatefulWidget{final D deck;final AudioPlayer pl;final String name;final Uint8List?art;final bool live,next,lift;
+final VoidCallback onPlay,onPick;final Future<void> Function(int)onSeek;const Deck({super.key,required this.deck,required this.pl,required this.name,
+required this.art,required this.live,required this.next,required this.onPlay,required this.onPick,required this.onSeek,required this.lift});
+@override State<Deck>createState()=>DD();}
+class DD extends State<Deck> with TickerProviderStateMixin{late AnimationController an,rg;StreamSubscription<bool>?ps;
+@override void initState(){super.initState();an=AnimationController(vsync:this,duration:Duration(seconds:3));
+rg=AnimationController(vsync:this,duration:Duration(seconds:5));ps=widget.pl.playingStream.listen((p){if(!mounted)return;
+if(p){an.repeat();rg.repeat();}else{an.stop();rg.stop();}});}
+@override void dispose(){ps?.cancel();an.dispose();rg.dispose();super.dispose();}
+String _f(Duration d)=>'${d.inMinutes.remainder(60).toString().padLeft(2,'0')}:${(d.inSeconds%60).toString().padLeft(2,'0')}';
+Widget _da(){Widget im;if(widget.art!=null&&widget.art!.isNotEmpty)im=Image.memory(widget.art!,width:130,height:130,fit:BoxFit.cover);
+else im=Image.asset('assets/images/default_cover.png',width:130,height:130,fit:BoxFit.cover,errorBuilder:(c,e,s)=>Icon(Icons.music_note,size:60));
+return Container(width:155,height:155,decoration:BoxDecoration(shape:BoxShape.circle,color:Colors.black,border:Border.all(color:widget.live?Colors.white24:Colors.white10)),
+child:ClipOval(child:Stack(fit:StackFit.expand,children:[im,CustomPaint(painter:Gr()),Center(child:Container(width:60,height:60,
+decoration:BoxDecoration(shape:BoxShape.circle,color:Color(0xFF101010)),child:Container(margin:EdgeInsets.all(2),
+decoration:BoxDecoration(shape:BoxShape.circle,border:Border.all(color:widget.live?Color(0xFFCEBBFF):Colors.white24)))))]))); }
+@override Widget build(BuildContext c)=>Column(mainAxisAlignment:widget.lift?MainAxisAlignment.start:MainAxisAlignment.center,children:[
+Text('DECK ${widget.deck==D.a?'A':'B'} ${widget.live?'(LIVE)':widget.next?'(NEXT)':''}',style:TextStyle(fontSize:11,color:widget.live?Color(0xFFCEBBFF):Colors.white70)),
+SizedBox(width:195,height:195,child:Stack(alignment:Alignment.center,children:[RotationTransition(turns:rg,child:CustomPaint(size:Size(195,195),
+painter:RL(live:widget.live,has:widget.name!='No track',play:widget.pl.playing))),RotationTransition(turns:an,child:_da()),
+StreamBuilder<bool>(stream:widget.pl.playingStream,initialData:widget.pl.playing,builder:(x,s){bool pl=s.data??false;return InkWell(
+customBorder:CircleBorder(),onTap:widget.onPlay,child:Container(width:54,height:54,decoration:BoxDecoration(shape:BoxShape.circle,color:Color(0xFFCEBBFF)),
+child:Icon(pl?Icons.pause:Icons.play_arrow,color:Colors.black)));})])),Text(widget.name,style:TextStyle(fontSize:11),overflow:TextOverflow.ellipsis),
+StreamBuilder<Duration>(stream:widget.pl.positionStream,builder:(x,s){var po=s.data??Duration.zero;var du=widget.pl.duration??Duration(seconds:1);
+var pr=(po.inMilliseconds/du.inMilliseconds).clamp(0.0,1.0);return Column(children:[SizedBox(height:20,child:Slider(value:pr,min:0,max:1,
+activeColor:widget.live?Color(0xFFCEBBFF):Colors.white38,onChanged:(v)async=>await widget.pl.seek(Duration(milliseconds:(v*du.inMilliseconds).round())))),
+Text('${_f(po)} / ${_f(du)}',style:TextStyle(fontSize:10,color:Colors.white38)),Row(mainAxisAlignment:MainAxisAlignment.center,children:[
+IconButton(icon:Icon(Icons.replay_10),onPressed:()=>widget.onSeek(-10)),IconButton(icon:Icon(Icons.folder_open),onPressed:widget.onPick),
+IconButton(icon:Icon(Icons.forward_10),onPressed:()=>widget.onSeek(10))])]);})]);}
+class RL extends CustomPainter{final bool live,has,play;RL({required this.live,required this.has,required this.play});
+@override void paint(Canvas cv,Size sz){var ct=Offset(sz.width/2,sz.height/2);var rad=sz.width/2;if(!has){
+cv.drawCircle(ct,rad,Paint()..style=PaintingStyle.stroke..strokeWidth=2..color=Colors.white12);return;}var p=Paint()..style=PaintingStyle.stroke..strokeWidth=5
+..shader=SweepGradient(colors:[Color(0xFF087BFF),Color(0xFF111111),Color(0xFFFF7A00),Color(0xFF111111),Color(0xFF087BFF)]).createShader(Rect.fromCircle(center:ct,radius:rad));
+cv.drawCircle(ct,rad-2,p);if(play){var g=Paint()..style=PaintingStyle.stroke..strokeWidth=12..color=(live?Color(0xFFCEBBFF):Colors.orange).withOpacity(0.25)
+..maskFilter=MaskFilter.blur(BlurStyle.normal,8);cv.drawCircle(ct,rad-2,g);}}@override bool shouldRepaint(covariant RL o)=>o.live!=live||o.has!=has||o.play!=play;}
+class Gr extends CustomPainter{@override void paint(Canvas cv,Size sz){var ct=Offset(sz.width/2,sz.height/2);var r=sz.width/2;
+var p=Paint()..style=PaintingStyle.stroke..strokeWidth=1..color=Colors.white.withOpacity(0.06);for(double i=20;i<r-5;i+=5)cv.drawCircle(ct,i,p);}
+@override bool shouldRepaint(covariant CustomPainter o)=>false;}
