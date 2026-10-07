@@ -6,13 +6,14 @@ class S extends State<DJ>{static const C=Color(0xFFCEBBFF);final a=AudioPlayer()
 String?na,nb;Uint8List?aa,ab;D l=D.a;bool au=false,xf=false;double xv=0;List<T>q=[];int qi=0;Timer?tk;
 P(d)=>d==D.a?a:b;O(d)=>d==D.a?D.b:D.a;N(d)=>d==D.a?na:nb;A(d)=>d==D.a?aa:ab;SN(d,v){d==D.a?na=v:nb=v;}SA(d,v){d==D.a?aa=v:ab=v;}
 @override void initState(){super.initState();
-a.playerStateStream.listen((s){if(s.processingState==ProcessingState.completed&&au)_hn(D.a);});
-b.playerStateStream.listen((s){if(s.processingState==ProcessingState.completed&&au)_hn(D.b);});
+a.playerStateStream.listen((s){if(s.processingState==ProcessingState.completed&&au){if(xf){_force(O(l));}else _hn(D.a);}});
+b.playerStateStream.listen((s){if(s.processingState==ProcessingState.completed&&au){if(xf){_force(O(l));}else _hn(D.b);}});
 tk=Timer.periodic(Duration(milliseconds:300),(_){if(!mounted||xf)return;var pl=P(l);var du=pl.duration;if(du==null)return;
 var rem=du.inMilliseconds-pl.position.inMilliseconds;if(rem<=10000&&N(O(l))!=null)_fd(O(l));
 else if(rem<=15000&&rem>10000&&N(O(l))==null&&au)_pr();});}
 @override void dispose(){tk?.cancel();a.dispose();b.dispose();super.dispose();}
-void _hn(D d)async{if(!au)return;var nd=O(l);if(N(nd)==null){var n=_nx();if(n!=null)await _ld(nd,n);}if(N(nd)!=null&&!xf)await _fd(nd);}
+void _force(D t){xf=false;l=t;xv=t==D.a?0:1;try{P(t).setVolume(1);}catch(_){}SN(O(t),null);SA(O(t),null);setState((){});}
+void _hn(D d)async{if(!au||xf)return;var nd=O(l);if(N(nd)==null){var n=_nx();if(n!=null)await _ld(nd,n);}if(N(nd)!=null)await _fd(nd);}
 T?_nx(){if(q.isEmpty)return null;var t=q[qi%q.length];qi=(qi+1)%q.length;return t;}
 Future<Uint8List?>_ar(String p)async{try{var t=await AudioTags.read(p);if(t!=null&&t.pictures.isNotEmpty)return t.pictures.first.bytes;}catch(_){}return null;}
 Future _ld(D d,T t,{bool lp=false})async{var pl=P(d);SN(d,t.n);SA(d,null);setState((){});try{await pl.stop();await pl.setFilePath(t.p);
@@ -24,13 +25,11 @@ _ar(x.p).then((i){if(mounted){SA(nd,i);setState((){});}});setState((){});}
 Future _au()async{if(q.isEmpty)return;if(N(l)==null){var f=_nx();if(f!=null){await _ld(l,f,lp:false);xv=l==D.a?0:1;setState((){});
 try{await P(l).setVolume(1);await P(l).play();}catch(_){}await Future.delayed(Duration(milliseconds:250));
 try{if(!P(l).playing)await P(l).play();}catch(_){}}}else{try{await P(l).play();}catch(_){}}setState((){});}
-Future _fd(D t)async{if(xf||N(t)==null)return;xf=true;setState((){});var s=l,sp=P(s),tp=P(t);
-try{ // restored working fade + fixed B play with volume
-try{await tp.seek(Duration(milliseconds:200));await tp.setVolume(0.05);await tp.play();}catch(_){}
-await Future.delayed(Duration(milliseconds:150));try{if(!tp.playing)await tp.play();}catch(_){}
-for(int i=0;i<=100;i++){var v=i/100.0;xv=s==D.a?v:1-v;try{sp.setVolume(m.cos(v*m.pi/2));tp.setVolume(m.sin(v*m.pi/2));}catch(_){}
-if(mounted)setState((){});await Future.delayed(Duration(milliseconds:100));}
-try{await sp.pause();await sp.stop();}catch(_){}SN(s,null);SA(s,null);l=t;xv=t==D.a?0:1;try{await tp.setVolume(1);}catch(_){}
+Future _fd(D t)async{if(N(t)==null)return;if(xf)return;xf=true;setState((){});var s=l,sp=P(s),tp=P(t);
+try{try{await tp.setVolume(0.05);await tp.seek(Duration(milliseconds:200));await tp.play();}catch(_){}
+for(int i=0;i<=80;i++){var v=i/80.0;xv=s==D.a?v:1-v;try{sp.setVolume(m.cos(v*m.pi/2));tp.setVolume(m.sin(v*m.pi/2));}catch(_){}
+if(mounted)setState((){});await Future.delayed(Duration(milliseconds:100));} // 8s fade finishes before track ends
+try{sp.pause();}catch(_){}SN(s,null);SA(s,null);l=t;xv=t==D.a?0:1;try{await tp.setVolume(1);}catch(_){}
 }finally{xf=false;if(mounted)setState((){});}}
 Future _tg(D d)async{if(xf)return;var pl=P(d);if(pl.playing){await pl.pause();setState((){});return;}
 if(N(d)==null){var t=_nx();if(t!=null){await _ld(d,t,lp:true);l=d;xv=d==D.a?0:1;setState((){});}return;}
