@@ -9,25 +9,24 @@ P(d)=>d==D.a?a:b;O(d)=>d==D.a?D.b:D.a;N(d)=>d==D.a?na:nb;A(d)=>d==D.a?aa:ab;SN(d
 a.playerStateStream.listen((s){if(s.processingState==ProcessingState.completed&&au){if(xf&&N(O(l))!=null)_force(O(l));else if(!xf)_hn(D.a);}});
 b.playerStateStream.listen((s){if(s.processingState==ProcessingState.completed&&au){if(xf&&N(O(l))!=null)_force(O(l));else if(!xf)_hn(D.b);}});
 tk=Timer.periodic(Duration(milliseconds:100),(_){_tick();});}
-void _tick()async{if(!mounted||!au)return;var pl=P(l);var du=pl.duration;if(du==null)return;var rem=du.inMilliseconds-pl.position.inMilliseconds;
-var nd=O(l);if(!xf&&N(nd)==null&&rem<=15000&&rem>10000)await _pr();if(N(nd)!=null&&!xf&&rem<=10000)await _fd(nd);}
+void _tick()async{if(!mounted||!au||xf)return;var du=P(l).duration;if(du==null)return;var rem=du.inMilliseconds-P(l).position.inMilliseconds;
+if(rem<0)rem=0;var nd=O(l);if(N(nd)==null&&rem<=15000&&rem>10000)await _pr();if(N(nd)!=null&&rem<=10000&&rem>=0)await _fd(nd);}
 @override void dispose(){tk?.cancel();a.dispose();b.dispose();super.dispose();}
 void _force(D t){if(t==l||N(t)==null)return;xf=false;l=t;xv=t==D.a?0:1;try{P(t).setVolume(1);P(O(t)).setVolume(0);}catch(_){}SN(O(t),null);SA(O(t),null);if(mounted)setState((){});}
-void _hn(D d)async{if(!au||xf)return;var nd=O(d);if(N(nd)==null){var n=_nx();if(n!=null)await _ld(nd,n);}if(N(nd)!=null&&!P(nd).playing)await _fd(nd);}
+void _hn(D d)async{if(!au||xf)return;var nd=O(d);if(N(nd)==null){var n=_nx();if(n!=null)await _ld(nd,n);}if(N(nd)!=null)await _fd(nd);}
 T?_nx(){if(q.isEmpty)return null;var t=q[qi%q.length];qi=(qi+1)%q.length;return t;}
 Future<Uint8List?>_ar(String p)async{try{var x=await AudioTags.read(p);if(x!=null&&x.pictures.isNotEmpty)return x.pictures.first.bytes;}catch(_){}return null;}
-Future _ld(D d,T t,{bool lp=false})async{var pl=P(d);SN(d,t.n);SA(d,null);if(mounted)setState((){});try{await pl.stop();await pl.setFilePath(t.p);await pl.setVolume(d==l?1:0);}catch(_){}
+Future _ld(D d,T t,{bool lp=false})async{var pl=P(d);SN(d,t.n);SA(d,null);if(mounted)setState((){});try{await pl.stop();await pl.setFilePath(t.p);await pl.setVolume(d==l?1:0);}catch(_){if(!lp){SN(d,null);}}
 if(lp){try{await pl.play();}catch(_){}}_ar(t.p).then((i){if(mounted){SA(d,i);setState((){});}});}
-Future _pr()async{if(q.isEmpty||N(O(l))!=null||xf)return;var x=_nx();if(x==null)return;var nd=O(l);SN(nd,x.n);SA(nd,null);if(mounted)setState((){});try{await P(nd).stop();await P(nd).setFilePath(x.p);await P(nd).setVolume(0);}catch(_){}_ar(x.p).then((i){if(mounted){SA(nd,i);setState((){});}});}
+Future _pr()async{if(q.isEmpty||N(O(l))!=null||xf)return;var x=_nx();if(x==null)return;var nd=O(l);SN(nd,x.n);SA(nd,null);if(mounted)setState((){});try{await P(nd).stop();await P(nd).setFilePath(x.p);await P(nd).seek(Duration.zero);await P(nd).setVolume(0);}catch(_){SN(nd,null);SA(nd,null);}}
 Future _au()async{if(q.isEmpty)return;if(N(l)==null){var f=_nx();if(f!=null){await _ld(l,f,lp:true);xv=l==D.a?0:1;}}else{try{await P(l).play();}catch(_){}}if(mounted)setState((){});}
 Future _fd(D t)async{if(N(t)==null||xf)return;var s=l,sp=P(s),tp=P(t);if(!sp.playing&&tp.playing){SN(s,null);SA(s,null);l=t;xv=t==D.a?0:1;if(mounted)setState((){});return;}
-xf=true;if(mounted)setState((){});try{try{await tp.stop();}catch(_){}await tp.setVolume(0);try{await tp.play();}catch(_){
-try{var fn=q.firstWhere((e)=>e.n==N(t));await tp.setFilePath(fn.p);await tp.setVolume(0);await tp.play();}catch(_){}}
+xf=true;if(mounted)setState((){});try{await tp.setVolume(0);try{await tp.seek(Duration.zero);}catch(_){}await tp.play();
 await Future.delayed(Duration(milliseconds:50));for(int i=0;i<=80;i++){var v=i/80.0;var av=m.cos(v*m.pi/2);var bv=m.sin(v*m.pi/2);
 if(s==D.a){xv=v;}else{xv=1-v;}try{await sp.setVolume(av);}catch(_){}try{await tp.setVolume(bv);}catch(_){}
 if(mounted)setState((){});if(i<80)await Future.delayed(Duration(milliseconds:100));}try{await sp.pause();}catch(_){}
 try{await sp.setVolume(0);}catch(_){}try{await tp.setVolume(1);}catch(_){}SN(s,null);SA(s,null);l=t;xv=t==D.a?0:1;}catch(_){
-try{await tp.setVolume(1);}catch(_){}}finally{xf=false;if(mounted)setState((){});}}
+try{await tp.setVolume(1);}catch(_){}try{await tp.play();}catch(_){}}finally{xf=false;if(mounted)setState((){});}}
 Future _tg(D d)async{if(xf)return;var pl=P(d);if(pl.playing){await pl.pause();if(mounted)setState((){});return;}
 if(N(d)==null){var x=_nx();if(x!=null){await _ld(d,x,lp:true);l=d;xv=d==D.a?0:1;}}else if(d!=l){await _fd(d);}else{try{await pl.play();}catch(_){}}if(mounted)setState((){});}
 Future _pk(D d)async{var r=await FilePicker.platform.pickFiles(type:FileType.audio);if(r==null)return;var p=r.files.single.path;
