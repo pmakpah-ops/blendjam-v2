@@ -6,29 +6,28 @@ class S extends State<DJ>{static const C=Color(0xFFCEBBFF);final a=AudioPlayer()
 String?na,nb;Uint8List?aa,ab;D l=D.a;bool au=false,xf=false;double xv=0;List<T>q=[];int qi=0;Timer?tk;
 P(d)=>d==D.a?a:b;O(d)=>d==D.a?D.b:D.a;N(d)=>d==D.a?na:nb;A(d)=>d==D.a?aa:ab;SN(d,v){d==D.a?na=v:nb=v;}SA(d,v){d==D.a?aa=v:ab=v;}
 @override void initState(){super.initState();
-a.positionStream.listen((p)=>_ck(D.a,p));b.positionStream.listen((p)=>_ck(D.b,p));
-a.playerStateStream.listen((s){if(s.processingState==ProcessingState.completed&&!xf)_hn(D.a);});
-b.playerStateStream.listen((s){if(s.processingState==ProcessingState.completed&&!xf)_hn(D.b);});
-tk=Timer.periodic(Duration(milliseconds:400),(_){if(!mounted||xf)return;var pl=P(l);var du=pl.duration;if(du==null)return;
-var rem=du-pl.position;if(rem.inSeconds<=10&&rem.inSeconds>=0&&N(O(l))!=null){_fd(O(l));}else if(rem.inSeconds<=15&&N(O(l))==null&&au)_pr();});}
+a.playerStateStream.listen((s){if(s.processingState==ProcessingState.completed&&au)_hn(D.a);});
+b.playerStateStream.listen((s){if(s.processingState==ProcessingState.completed&&au)_hn(D.b);});
+tk=Timer.periodic(Duration(milliseconds:400),(_){if(!mounted)return;var pl=P(l);var du=pl.duration;if(du==null)return;
+var rem=du-pl.position;var sec=rem.inMilliseconds/1000.0;if(!xf&&sec<=10&&sec>=0&&N(O(l))!=null){_fd(O(l));}
+else if(!xf&&sec<=15&&sec>10&&N(O(l))==null){_pr();}});}
 @override void dispose(){tk?.cancel();a.dispose();b.dispose();super.dispose();}
-void _hn(D d)async{if(!au)return;if(xf)return;if(d!=l&&N(d)==null)return;var nd=d==l?O(d):d;if(N(nd)==null){var n=_nx();if(n!=null)await _ld(nd,n);}if(N(nd)!=null)await _fd(nd);}
-void _ck(D d,Duration p){if(!mounted||xf||d!=l)return;var du=P(d).duration;if(du==null)return;var rem=du-p;
-if(rem.inSeconds<=10&&rem.inSeconds>=0&&N(O(d))!=null)_fd(O(d));if(rem.inSeconds<=15&&N(O(d))==null&&au)_pr();}
+void _hn(D d)async{if(!au||xf)return;var nd=O(l);if(N(nd)==null){var n=_nx();if(n!=null)await _ld(nd,n);}if(N(nd)!=null)await _fd(nd);}
 T?_nx(){if(q.isEmpty)return null;var t=q[qi%q.length];qi=(qi+1)%q.length;return t;}
 Future<Uint8List?>_ar(String p)async{try{var t=await AudioTags.read(p);if(t!=null&&t.pictures.isNotEmpty)return t.pictures.first.bytes;}catch(_){}return null;}
-Future _ld(D d,T t,{bool lp=false})async{var pl=P(d);SN(d,t.n);SA(d,null);setState((){});try{await pl.stop();
-await pl.setFilePath(t.p);await pl.seek(Duration(milliseconds:300));await pl.setVolume(d==l?1:0);if(lp)await pl.play();else await pl.pause();}catch(_){}
+Future _ld(D d,T t,{bool lp=false})async{var pl=P(d);SN(d,t.n);SA(d,null);setState((){});try{await pl.stop();await pl.setFilePath(t.p);
+await pl.seek(Duration(milliseconds:350));await pl.setVolume(d==l?1:0);}catch(_){}if(lp){try{await pl.play();}catch(_){}} 
 _ar(t.p).then((i){if(mounted){SA(d,i);setState((){});}});setState((){});}
-Future _pr()async{if(q.isEmpty||xf||N(O(l))!=null)return;var x=_nx();if(x==null)return;var nd=O(l);SN(nd,x.n);SA(nd,null);setState((){});
-try{await P(nd).stop();await P(nd).setFilePath(x.p);await P(nd).seek(Duration(milliseconds:300));await P(nd).setVolume(0);await P(nd).pause();}catch(_){}
+Future _pr()async{if(q.isEmpty||N(O(l))!=null)return;var x=_nx();if(x==null)return;var nd=O(l);SN(nd,x.n);SA(nd,null);setState((){});
+try{await P(nd).stop();await P(nd).setFilePath(x.p);await P(nd).seek(Duration(milliseconds:350));await P(nd).setVolume(0);await P(nd).pause();}catch(_){}
 _ar(x.p).then((i){if(mounted){SA(nd,i);setState((){});}});setState((){});}
-Future _au()async{if(q.isEmpty)return;if(N(l)==null){var f=_nx();if(f!=null){await _ld(l,f,lp:true);xv=l==D.a?0:1;}}else{try{await P(l).play();}catch(_){}}setState((){});}
+Future _au()async{if(q.isEmpty)return;if(N(l)==null){var f=_nx();if(f!=null){await _ld(l,f,lp:false);xv=l==D.a?0:1;setState((){});
+await Future.delayed(Duration(milliseconds:100));try{await P(l).setVolume(1);await P(l).play();}catch(_){}}}else{try{await P(l).play();}catch(_){}}setState((){});}
 Future _fd(D t)async{if(xf||N(t)==null)return;xf=true;setState((){});var s=l,sp=P(s),tp=P(t);
-try{await tp.seek(Duration(milliseconds:300));await tp.setVolume(0);await tp.play();
+try{try{await tp.seek(Duration(milliseconds:350));await tp.setVolume(0);await tp.play();}catch(_){}
 for(int i=0;i<=100;i++){var v=i/100.0;xv=s==D.a?v:1-v;try{sp.setVolume(m.cos(v*m.pi/2));tp.setVolume(m.sin(v*m.pi/2));}catch(_){}
 if(mounted)setState((){});await Future.delayed(Duration(milliseconds:100));}
-await sp.pause();await sp.stop();SN(s,null);SA(s,null);l=t;xv=t==D.a?0:1;await tp.setVolume(1);
+await sp.pause();try{await sp.stop();}catch(_){}SN(s,null);SA(s,null);l=t;xv=t==D.a?0:1;try{await tp.setVolume(1);}catch(_){}
 }finally{xf=false;if(mounted)setState((){});}}
 Future _tg(D d)async{if(xf)return;var pl=P(d);if(pl.playing){await pl.pause();setState((){});return;}
 if(N(d)==null){var t=_nx();if(t!=null){await _ld(d,t,lp:true);l=d;xv=d==D.a?0:1;setState((){});}return;}
@@ -37,10 +36,10 @@ Future _pk(D d)async{var r=await FilePicker.platform.pickFiles(type:FileType.aud
 if(p!=null){await _ld(d,T(p,r.files.single.name),lp:true);l=d;xv=d==D.a?0:1;setState((){});}}
 Future _aq()async{var r=await FilePicker.platform.pickFiles(type:FileType.audio,allowMultiple:true);if(r==null)return;
 setState(()=>q.addAll(r.files.where((f)=>f.path!=null).map((f)=>T(f.path!,f.name))));if(au)await _au();}
-Future _sx(double v)async{xv=v;if(!xf){await a.setVolume(1-v);await b.setVolume(v);}if(v<0.35)l=D.a;else if(v>0.65)l=D.b;setState((){});}
+Future _sx(double v)async{xv=v;if(!xf){try{await a.setVolume(1-v);await b.setVolume(v);}catch(_){}}if(v<0.35)l=D.a;else if(v>0.65)l=D.b;setState((){});}
 void _qp(){showModalBottomSheet(context:context,builder:(c){return SafeArea(child:Column(children:[ListTile(title:Text('QUEUE ${q.length}'),trailing:Row(mainAxisSize:MainAxisSize.min,children:[IconButton(icon:Icon(Icons.add),onPressed:()async{await _aq();Navigator.pop(c);_qp();}),IconButton(icon:Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),Expanded(child:ListView.builder(itemCount:q.length,itemBuilder:(x,i){var live=N(l)==q[i].n;return ListTile(dense:true,title:Text(q[i].n,overflow:TextOverflow.ellipsis,style:TextStyle(color:live?C:Colors.white)),onTap:()async{Navigator.pop(c);await _ld(O(l),q[i]);});}))]));});}
 Widget _dk(D d,bool up)=>Deck(deck:d,pl:P(d),name:N(d)??'No track',art:A(d),live:l==d,next:N(d)!=null&&l!=d,onPlay:()=>_tg(d),onPick:()=>_pk(d),onSeek:(s)async=>await P(d).seek(P(d).position+Duration(seconds:s)),lift:up);
-@override Widget build(BuildContext c)=>Scaffold(backgroundColor:Colors.black,appBar:AppBar(backgroundColor:Colors.black,title:Text('BlendJam'),actions:[Text('AUTO'),Switch(value:au,activeColor:C,onChanged:(v)async{setState(()=>au=v);if(v)await _au();}),IconButton(icon:Icon(Icons.queue_music),onPressed:_qp)]),body:SafeArea(child:Column(children:[Flexible(child:_dk(D.a,false)),Padding(padding:EdgeInsets.symmetric(horizontal:12,vertical:2),child:Column(children:[Row(children:[Text('A'),Expanded(child:Slider(value:xv,min:0,max:1,activeColor:C,onChanged:_sx)),Text('B')]),Text(xf?'MIXING ${(xv*100).toInt()}% -> ${l==D.a?'A':'B'}':'',style:TextStyle(color:C,fontSize:11))])),Flexible(child:_dk(D.b,true))]))) ;}
+@override Widget build(BuildContext c)=>Scaffold(backgroundColor:Colors.black,appBar:AppBar(backgroundColor:Colors.black,title:Text('BlendJam'),actions:[Text('AUTO'),Switch(value:au,activeColor:C,onChanged:(v)async{setState(()=>au=v);if(v)await _au();}),IconButton(icon:Icon(Icons.queue_music),onPressed:_qp)]),body:SafeArea(child:Column(children:[Flexible(child:_dk(D.a,false)),Padding(padding:EdgeInsets.symmetric(horizontal:12,vertical:2),child:Column(children:[Row(children:[Text('A'),Expanded(child:Slider(value:xv,min:0,max:1,activeColor:C,onChanged:_sx)),Text('B')]),Text(xf?'MIXING ${(xv*100).toInt()}% -> ${l==D.a?'B':'A'}':'',style:TextStyle(color:C,fontSize:11))])),Flexible(child:_dk(D.b,true))]))) ;}
 class Deck extends StatefulWidget{final D deck;final AudioPlayer pl;final String name;final Uint8List?art;final bool live,next,lift;final VoidCallback onPlay,onPick;final Future<void> Function(int)onSeek;const Deck({super.key,required this.deck,required this.pl,required this.name,required this.art,required this.live,required this.next,required this.onPlay,required this.onPick,required this.onSeek,required this.lift});@override State<Deck>createState()=>DD();}
 class DD extends State<Deck> with TickerProviderStateMixin{late AnimationController an,rg;StreamSubscription<bool>?ps;@override void initState(){super.initState();an=AnimationController(vsync:this,duration:Duration(seconds:3));rg=AnimationController(vsync:this,duration:Duration(seconds:5));ps=widget.pl.playingStream.listen((p){if(!mounted)return;if(p){an.repeat();rg.repeat();}else{an.stop();rg.stop();}});} @override void dispose(){ps?.cancel();an.dispose();rg.dispose();super.dispose();}
 String _f(Duration d)=>'${d.inMinutes.remainder(60).toString().padLeft(2,'0')}:${(d.inSeconds%60).toString().padLeft(2,'0')}';
