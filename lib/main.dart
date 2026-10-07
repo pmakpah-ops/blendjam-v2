@@ -19,18 +19,18 @@ Future _ld(D d,T t,{bool lp=false})async{var pl=P(d);SN(d,t.n);SA(d,null);setSta
 await pl.seek(Duration(milliseconds:200));await pl.setVolume(d==l?1:0);}catch(_){}if(lp){try{await pl.play();}catch(_){}}
 _ar(t.p).then((i){if(mounted){SA(d,i);setState((){});}});setState((){});}
 Future _pr()async{if(q.isEmpty||N(O(l))!=null||xf)return;var x=_nx();if(x==null)return;var nd=O(l);SN(nd,x.n);SA(nd,null);setState((){});
-try{await P(nd).stop();await P(nd).setFilePath(x.p);await P(nd).seek(Duration(milliseconds:200));await P(nd).setVolume(0);}catch(_){}
+try{await P(nd).stop();await P(nd).setFilePath(x.p);await P(nd).seek(Duration(milliseconds:200));await P(nd).setVolume(0.05);}catch(_){}
 _ar(x.p).then((i){if(mounted){SA(nd,i);setState((){});}});setState((){});}
 Future _au()async{if(q.isEmpty)return;if(N(l)==null){var f=_nx();if(f!=null){await _ld(l,f,lp:false);xv=l==D.a?0:1;setState((){});
 try{await P(l).setVolume(1);await P(l).play();}catch(_){}await Future.delayed(Duration(milliseconds:250));
 try{if(!P(l).playing)await P(l).play();}catch(_){}}}else{try{await P(l).play();}catch(_){}}setState((){});}
 Future _fd(D t)async{if(xf||N(t)==null)return;xf=true;setState((){});var s=l,sp=P(s),tp=P(t);
-try{ // tie play to fade - start B at low vol before fading
-try{await tp.setVolume(0.02);await tp.seek(Duration(milliseconds:200));await tp.play();}catch(_){}
-await Future.delayed(Duration(milliseconds:350));try{if(!tp.playing)await tp.play();}catch(_){}
-for(int i=0;i<=100;i++){var v=i/100.0;xv=s==D.a?v:1-v;try{if(!tp.playing)tp.play();sp.setVolume(m.cos(v*m.pi/2));tp.setVolume(m.sin(v*m.pi/2));}catch(_){}
+try{ // restored working fade + fixed B play with volume
+try{await tp.seek(Duration(milliseconds:200));await tp.setVolume(0.05);await tp.play();}catch(_){}
+await Future.delayed(Duration(milliseconds:150));try{if(!tp.playing)await tp.play();}catch(_){}
+for(int i=0;i<=100;i++){var v=i/100.0;xv=s==D.a?v:1-v;try{sp.setVolume(m.cos(v*m.pi/2));tp.setVolume(m.sin(v*m.pi/2));}catch(_){}
 if(mounted)setState((){});await Future.delayed(Duration(milliseconds:100));}
-try{await sp.pause();await sp.stop();}catch(_){}SN(s,null);SA(s,null);l=t;xv=t==D.a?0:1;try{await tp.setVolume(1);if(!tp.playing)await tp.play();}catch(_){}
+try{await sp.pause();await sp.stop();}catch(_){}SN(s,null);SA(s,null);l=t;xv=t==D.a?0:1;try{await tp.setVolume(1);}catch(_){}
 }finally{xf=false;if(mounted)setState((){});}}
 Future _tg(D d)async{if(xf)return;var pl=P(d);if(pl.playing){await pl.pause();setState((){});return;}
 if(N(d)==null){var t=_nx();if(t!=null){await _ld(d,t,lp:true);l=d;xv=d==D.a?0:1;setState((){});}return;}
