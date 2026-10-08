@@ -3,22 +3,20 @@ void main()=>runApp(MaterialApp(theme:ThemeData.dark(),home:DJ()));class T{Strin
 class DJ extends StatefulWidget{const DJ({super.key});@override State<DJ>createState()=>S();}
 class S extends State<DJ>{static const C=Color(0xFFCEBBFF);final a=AudioPlayer(),b=AudioPlayer();String?na,nb;Uint8List?aa,ab;D l=D.a;bool au=false,xf=false,ar=false;double xv=0;List<T>q=[];int qi=0;
 P(d)=>d==D.a?a:b;O(d)=>d==D.a?D.b:D.a;N(d)=>d==D.a?na:nb;A(d)=>d==D.a?aa:ab;SN(d,v){d==D.a?na=v:nb=v;}SA(d,v){d==D.a?aa=v:ab=v;}
-@override void initState(){super.initState();a.positionStream.listen((p)=>_ck(D.a,p));b.positionStream.listen((p)=>_ck(D.b,p));
-a.playerStateStream.listen((s){if(s.processingState==ProcessingState.completed&&!xf)_en(l);});
-b.playerStateStream.listen((s){if(s.processingState==ProcessingState.completed&&!xf)_en(l);});}
+@override void initState(){super.initState();a.positionStream.listen((p)=>_ck(D.a,p));b.positionStream.listen((p)=>_ck(D.b,p));}
 @override void dispose(){a.dispose();b.dispose();super.dispose();}
 T?_nx(){if(q.isEmpty)return null;var t=q[qi%q.length];qi=(qi+1)%q.length;return t;}
 Future<Uint8List?>_rt(String p)async{try{var t=await AudioTags.read(p);if(t!=null&&t.pictures.isNotEmpty)return t.pictures.first.bytes;}catch(_){}return null;}
 Future _ld(D d,T t,{bool pl=false})async{SN(d,t.n);SA(d,null);if(mounted)setState((){});var ap=P(d);try{await ap.stop();await ap.setFilePath(t.p);await ap.seek(Duration(milliseconds:200));await ap.setVolume(pl?1:0);await ap.setSpeed(1);}catch(_){}
 _rt(t.p).then((b){SA(d,b);if(mounted)setState((){});});if(pl){l=d;xv=d==D.a?0:1;try{await ap.play();}catch(_){}}if(mounted)setState((){});}
 Future _as()async{if(q.isEmpty)return;if(N(l)==null){var f=_nx();if(f!=null)await _ld(l,f,pl:true);}if(N(O(l))==null){var f=_nx();if(f!=null)await _ld(O(l),f);}}
-void _ck(D d,Duration p){if(xf||ar)return;if(d!=l)return;var du=P(d).duration;if(du==null||!P(d).playing)return;var r=du-p;if(au&&r.inSeconds==15&&N(O(l))==null){var f=_nx();if(f!=null)_ld(O(l),f);}if(r.inSeconds<=10&&r.inSeconds>=9&&N(D.a)!=null&&N(D.b)!=null){ar=true;_fd();}}
-void _en(D d)async{if(xf)return;var nd=O(d);if(N(nd)!=null)await _fd();else if(au){var f=_nx();if(f!=null){await _ld(nd,f,pl:false);await _fd();}}}
-Future _fd()async{if(xf)return;var s=l,t=O(s);if(N(t)==null){var f=_nx();if(f!=null)await _ld(t,f);if(N(t)==null){ar=false;return;}}xf=true;var sp=P(s),tp=P(t);
-try{await tp.seek(Duration.zero);await tp.setVolume(0);await tp.setSpeed(1);await tp.play();}catch(_){try{var fn=q.firstWhere((e)=>e.n==N(t));await tp.setFilePath(fn.p);await tp.seek(Duration.zero);await tp.setVolume(0);await tp.play();}catch(_){xf=false;ar=false;return;}}
+void _ck(D d,Duration p){if(xf||ar)return;if(d!=l)return;var du=P(d).duration;if(du==null||!P(d).playing)return;var r=du-p;
+if(au&&r.inSeconds==15&&N(O(l))==null){var f=_nx();if(f!=null)_ld(O(l),f);} // PRELOAD like b379c89
+if(r.inSeconds<=10&&N(D.a)!=null&&N(D.b)!=null){ar=true;_fd();}} // FIX: was 9-10 window, now <=10 catches manual forward
+void _fd(){if(xf)return;var s=l,t=O(s);if(N(t)==null){ar=false;return;}xf=true;var sp=P(s),tp=P(t);tp.setVolume(0);tp.setSpeed(1);tp.play();
 int k=0;Timer.periodic(Duration(milliseconds:60),(tm)async{k++;double lin=k/100;if(lin>1)lin=1;double av=m.cos(lin*m.pi/2),bv=m.sin(lin*m.pi/2);xv=s==D.a?lin:1-lin;
-try{await sp.setVolume(av);}catch(_){}try{await tp.setVolume(k<10?0:bv);}catch(_){}if(mounted)setState((){});if(k>=100){tm.cancel();xv=s==D.a?1:0;try{await sp.stop();await sp.setVolume(0);}catch(_){}try{await tp.setVolume(1);}catch(_){}SN(s,null);SA(s,null);l=t;xf=false;ar=false;if(mounted)setState((){});if(au&&N(O(l))==null){var f=_nx();if(f!=null)await _ld(O(l),f);}}});}
-Future _tg(D d)async{if(xf)return;var pl=P(d);if(pl.playing){await pl.pause();}else{if(N(d)==null){var f=_nx();if(f!=null)await _ld(d,f,pl:true);}else if(d!=l)await _fd();else{try{await pl.play();l=d;xv=d==D.a?0:1;}catch(_){}}}if(mounted)setState((){});}
+sp.setVolume(av);tp.setVolume(k<10?0:bv);if(mounted)setState((){});if(k>=100){tm.cancel();xv=s==D.a?1:0;sp.setVolume(0);tp.setVolume(1);sp.stop();SN(s,null);SA(s,null);l=t;xf=false;ar=false;if(mounted)setState((){});if(au&&N(O(l))==null&&q.isNotEmpty){var f=_nx();if(f!=null)_ld(O(l),f);}}});}
+Future _tg(D d)async{if(xf)return;var pl=P(d);if(pl.playing)await pl.pause();else{if(N(d)==null){var f=_nx();if(f!=null)await _ld(d,f,pl:true);}else if(d!=l)_fd();else{await pl.play();l=d;xv=d==D.a?0:1;}}if(mounted)setState((){});}
 Future _pk(D d)async{var r=await FilePicker.platform.pickFiles(type:FileType.audio);if(r==null)return;var p=r.files.single.path;if(p!=null){var tg=P(l).playing?O(l):d;await _ld(tg,T(p,r.files.single.name),pl:!P(l).playing&&tg==l);if(P(l).playing)try{await P(tg).setVolume(0);}catch(_){}}}
 Future _aq()async{var r=await FilePicker.platform.pickFiles(type:FileType.audio,allowMultiple:true);if(r==null)return;setState(()=>q.addAll(r.files.where((f)=>f.path!=null).map((f)=>T(f.path!,f.name))));if(au)await _as();}
 void _qp(){showModalBottomSheet(context:context,builder:(c)=>SafeArea(child:Column(children:[ListTile(title:Text('QUEUE ${q.length} (loops)'),trailing:Row(mainAxisSize:MainAxisSize.min,children:[IconButton(icon:Icon(Icons.add),onPressed:()async{await _aq();Navigator.pop(c);_qp();}),IconButton(icon:Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),Expanded(child:ListView.builder(itemCount:q.length,itemBuilder:(x,i)=>ListTile(dense:true,title:Text(q[i].n,overflow:TextOverflow.ellipsis,style:TextStyle(color:N(l)==q[i].n?C:Colors.white)),onTap:()async{Navigator.pop(c);var d=P(l).playing?O(l):l;await _ld(d,q[i],pl:!P(l).playing);}))) ])));}
