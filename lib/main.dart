@@ -11,12 +11,10 @@ Future _ld(D d,T t,{bool pl=false})async{SN(d,t.n);SA(d,null);if(mounted)setStat
 _rt(t.p).then((b){SA(d,b);if(mounted)setState((){});});if(pl){l=d;xv=d==D.a?0:1;try{await ap.play();}catch(_){}}if(mounted)setState((){});}
 Future _as()async{if(q.isEmpty)return;if(N(l)==null){var f=_nx();if(f!=null)await _ld(l,f,pl:true);}if(N(O(l))==null){var f=_nx();if(f!=null)await _ld(O(l),f);}}
 void _ck(D d,Duration p){if(xf||ar)return;if(d!=l)return;var du=P(d).duration;if(du==null||!P(d).playing)return;var r=du-p;
-if(au&&r.inSeconds==15&&N(O(l))==null){var f=_nx();if(f!=null)_ld(O(l),f);} // preload NEXT at 15s like Sept 23
-if(r.inSeconds<=10&&r.inSeconds>=9&&N(D.a)!=null&&N(D.b)!=null){ar=true;_fd();}} // crossfade move at 10s
-// EXACT Sept 23 engine - plays NEXT and moves xv at same 10s
-void _fd(){if(xf)return;var s=l,t=O(s);if(N(t)==null){ar=false;return;}xf=true;var sp=P(s),tp=P(t);tp.setVolume(0);tp.setSpeed(1);tp.play();
-int k=0;const tot=100;Timer.periodic(const Duration(milliseconds:60),(tm)async{k++;double lin=k/tot;if(lin>1)lin=1;double av=m.cos(lin*m.pi/2),bv=m.sin(lin*m.pi/2);xv=s==D.a?lin:1-lin;
-await sp.setVolume(av);await tp.setVolume(bv);if(mounted)setState((){});if(k>=tot){tm.cancel();xv=s==D.a?1:0;await sp.setVolume(0);await tp.setVolume(1);await sp.stop();SN(s,null);SA(s,null);l=t;xf=false;ar=false;if(mounted)setState((){});if(au&&N(O(l))==null&&q.isNotEmpty){var f=_nx();if(f!=null)_ld(O(l),f);}}});}
+if(au&&r.inSeconds==15&&N(O(l))==null){var f=_nx();if(f!=null)_ld(O(l),f);}if(r.inSeconds<=10&&N(D.a)!=null&&N(D.b)!=null){ar=true;_fd();}}
+void _fd(){if(xf)return;var s=l,t=O(s);if(N(t)==null){ar=false;return;}xf=true;var sp=P(s),tp=P(t);tp.setVolume(0);tp.play();
+int k=0;Timer.periodic(const Duration(milliseconds:60),(tm){k++;double lin=k/100;if(lin>1)lin=1;double av=m.cos(lin*m.pi/2),bv=m.sin(lin*m.pi/2);xv=s==D.a?lin:1-lin;
+sp.setVolume(av);tp.setVolume(bv);if(mounted)setState((){});if(k>=100){tm.cancel();xv=s==D.a?1:0;sp.setVolume(0);tp.setVolume(1);sp.stop();SN(s,null);SA(s,null);l=t;xf=false;ar=false;if(mounted)setState((){});if(au&&N(O(l))==null){var f=_nx();if(f!=null)_ld(O(l),f);}}});}
 Future _tg(D d)async{if(xf)return;var pl=P(d);if(pl.playing)await pl.pause();else{if(N(d)==null){var f=_nx();if(f!=null)await _ld(d,f,pl:true);}else if(d!=l)_fd();else{try{await pl.play();l=d;xv=d==D.a?0:1;}catch(_){}}}if(mounted)setState((){});}
 Future _pk(D d)async{var r=await FilePicker.platform.pickFiles(type:FileType.audio);if(r==null)return;var p=r.files.single.path;if(p!=null){var tg=P(l).playing?O(l):d;await _ld(tg,T(p,r.files.single.name),pl:!P(l).playing&&tg==l);if(P(l).playing)try{await P(tg).setVolume(0);}catch(_){}}}
 Future _aq()async{var r=await FilePicker.platform.pickFiles(type:FileType.audio,allowMultiple:true);if(r==null)return;setState(()=>q.addAll(r.files.where((f)=>f.path!=null).map((f)=>T(f.path!,f.name))));if(au)await _as();}
