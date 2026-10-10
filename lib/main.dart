@@ -94,7 +94,8 @@ class S extends State<DJ> {
   }
   Future<void> _beginFade(D outgoing,{bool automatic=false})async{
     if(_disposed||xf||_transitioning||(automatic&&!au))return;
-    final incoming=O(outgoing),sp=P(outgoing),tp=P(incoming);\n    final outgoingName=N(outgoing);
+    final incoming=O(outgoing),sp=P(outgoing),tp=P(incoming);
+    final outgoingName=N(outgoing);
     if(N(incoming)==null||tp.duration==null)return;
     _transitioning=true;xf=true;_fadeTimer?.cancel();
     try{
