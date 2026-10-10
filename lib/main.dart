@@ -94,7 +94,7 @@ class S extends State<DJ> {
   }
   Future<void> _beginFade(D outgoing,{bool automatic=false})async{
     if(_disposed||xf||_transitioning||(automatic&&!au))return;
-    final incoming=O(outgoing),sp=P(outgoing),tp=P(incoming);
+    final incoming=O(outgoing),sp=P(outgoing),tp=P(incoming);\n    final outgoingName=N(outgoing);
     if(N(incoming)==null||tp.duration==null)return;
     _transitioning=true;xf=true;_fadeTimer?.cancel();
     try{
@@ -120,7 +120,7 @@ class S extends State<DJ> {
         timer.cancel();
         try{await tp.setVolume(1);await sp.setVolume(0);await sp.stop();}catch(_){}
         SN(outgoing,null);SA(outgoing,null);l=incoming;
-        _preparedFor.remove(N(incoming)??'');
+        _preparedFor.remove(outgoingName??'');
         _transitioning=false;xf=false;ar=false;
         if(mounted)setState((){});
         if(au&&N(O(l))==null){
