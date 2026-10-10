@@ -1,24 +1,173 @@
 import 'dart:async';import 'dart:math' as m;import 'dart:typed_data';import 'package:audiotags/audiotags.dart';import 'package:file_picker/file_picker.dart';import 'package:flutter/material.dart';import 'package:just_audio/just_audio.dart';
 void main()=>runApp(MaterialApp(theme:ThemeData.dark(),home:DJ()));class T{String p,n;T(this.p,this.n);}enum D{a,b}
-class DJ extends StatefulWidget{const DJ({super.key});@override State<DJ>createState()=>S();}
-class S extends State<DJ>{static const C=Color(0xFFCEBBFF);final a=AudioPlayer(),b=AudioPlayer();String?na,nb;Uint8List?aa,ab;D l=D.a;bool au=false,xf=false,ar=false;double xv=0;List<T>q=[];int qi=0;
-P(d)=>d==D.a?a:b;O(d)=>d==D.a?D.b:D.a;N(d)=>d==D.a?na:nb;A(d)=>d==D.a?aa:ab;SN(d,v){d==D.a?na=v:nb=v;}SA(d,v){d==D.a?aa=v:ab=v;}
-@override void initState(){super.initState();a.positionStream.listen((p)=>_ck(D.a,p));b.positionStream.listen((p)=>_ck(D.b,p));}
-@override void dispose(){a.dispose();b.dispose();super.dispose();}
-T?_nx(){if(q.isEmpty)return null;var t=q[qi%q.length];qi=(qi+1)%q.length;return t;}
-Future<Uint8List?>_rt(String p)async{try{var t=await AudioTags.read(p);if(t!=null&&t.pictures.isNotEmpty)return t.pictures.first.bytes;}catch(_){}return null;}
-Future _ld(D d,T t,{bool pl=false})async{SN(d,t.n);SA(d,null);if(mounted)setState((){});var ap=P(d);try{await ap.stop();await ap.setFilePath(t.p);await ap.seek(const Duration(milliseconds:200));await ap.setVolume(pl?1:0);await ap.setSpeed(1);}catch(_){}
-_rt(t.p).then((b){SA(d,b);if(mounted)setState((){});});if(pl){l=d;xv=d==D.a?0:1;try{await ap.play();}catch(_){}}if(mounted)setState((){});}
-Future _as()async{if(q.isEmpty)return;if(N(l)==null){var f=_nx();if(f!=null)await _ld(l,f,pl:true);}if(N(O(l))==null){var f=_nx();if(f!=null)await _ld(O(l),f);}}
-void _ck(D d,Duration p){if(xf||ar)return;if(d!=l)return;var du=P(d).duration;if(du==null||!P(d).playing)return;var r=du-p;
-if(au&&r.inSeconds==15&&N(O(l))==null){var f=_nx();if(f!=null)_ld(O(l),f);}if(r.inSeconds<=10&&N(D.a)!=null&&N(D.b)!=null){ar=true;_fd();}}
-void _fd(){if(xf)return;var s=l,t=O(s);if(N(t)==null){ar=false;return;}xf=true;var sp=P(s),tp=P(t);tp.setVolume(0);tp.play();
-int k=0;Timer.periodic(const Duration(milliseconds:60),(tm){k++;double lin=k/100;if(lin>1)lin=1;double av=m.cos(lin*m.pi/2),bv=m.sin(lin*m.pi/2);xv=s==D.a?lin:1-lin;
-sp.setVolume(av);tp.setVolume(bv);if(mounted)setState((){});if(k>=100){tm.cancel();xv=s==D.a?1:0;sp.setVolume(0);tp.setVolume(1);sp.stop();SN(s,null);SA(s,null);l=t;xf=false;ar=false;if(mounted)setState((){});if(au&&N(O(l))==null){var f=_nx();if(f!=null)_ld(O(l),f);}}});}
-Future _tg(D d)async{if(xf)return;var pl=P(d);if(pl.playing)await pl.pause();else{if(N(d)==null){var f=_nx();if(f!=null)await _ld(d,f,pl:true);}else if(d!=l)_fd();else{try{await pl.play();l=d;xv=d==D.a?0:1;}catch(_){}}}if(mounted)setState((){});}
-Future _pk(D d)async{var r=await FilePicker.platform.pickFiles(type:FileType.audio);if(r==null)return;var p=r.files.single.path;if(p!=null){var tg=P(l).playing?O(l):d;await _ld(tg,T(p,r.files.single.name),pl:!P(l).playing&&tg==l);if(P(l).playing)try{await P(tg).setVolume(0);}catch(_){}}}
-Future _aq()async{var r=await FilePicker.platform.pickFiles(type:FileType.audio,allowMultiple:true);if(r==null)return;setState(()=>q.addAll(r.files.where((f)=>f.path!=null).map((f)=>T(f.path!,f.name))));if(au)await _as();}
-void _qp(){showModalBottomSheet(context:context,builder:(c)=>SafeArea(child:Column(children:[ListTile(title:Text('QUEUE ${q.length} (loops)'),trailing:Row(mainAxisSize:MainAxisSize.min,children:[IconButton(icon:Icon(Icons.add),onPressed:()async{await _aq();Navigator.pop(c);_qp();}),IconButton(icon:Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),Expanded(child:ListView.builder(itemCount:q.length,itemBuilder:(x,i)=>ListTile(dense:true,title:Text(q[i].n,overflow:TextOverflow.ellipsis,style:TextStyle(color:N(l)==q[i].n?C:Colors.white)),onTap:()async{Navigator.pop(c);var d=P(l).playing?O(l):l;await _ld(d,q[i],pl:!P(l).playing);}))) ])));}
+class DJ extends StatefulWidget {
+  const DJ({super.key});
+  @override State<DJ> createState()=>S();
+}
+class S extends State<DJ> {
+  static const C=Color(0xFFCEBBFF);
+  static const _fadeLength=Duration(seconds:10);
+  final a=AudioPlayer(), b=AudioPlayer();
+  String? na,nb; Uint8List? aa,ab;
+  D l=D.a; bool au=false,xf=false,ar=false;
+  double xv=0; List<T> q=[]; int qi=0;
+  StreamSubscription<Duration>? _posA,_posB;
+  Timer? _fadeTimer;
+  bool _disposed=false,_transitioning=false;
+  int _generationA=0,_generationB=0;
+  final Set<String> _preparedFor= <String>{};
+
+  AudioPlayer P(D d)=>d==D.a?a:b;
+  D O(D d)=>d==D.a?D.b:D.a;
+  String? N(D d)=>d==D.a?na:nb;
+  Uint8List? A(D d)=>d==D.a?aa:ab;
+  void SN(D d,String? v){if(d==D.a)na=v;else nb=v;}
+  void SA(D d,Uint8List? v){if(d==D.a)aa=v;else ab=v;}
+  int _gen(D d)=>d==D.a?_generationA:_generationB;
+  void _bump(D d){if(d==D.a)_generationA++;else _generationB++;}
+  @override void initState(){
+    super.initState();
+    _posA=a.positionStream.listen((p)=>_ck(D.a,p));
+    _posB=b.positionStream.listen((p)=>_ck(D.b,p));
+  }
+  @override void dispose(){
+    _disposed=true;_fadeTimer?.cancel();
+    _posA?.cancel();_posB?.cancel();
+    a.dispose();b.dispose();super.dispose();
+  }
+  T? _nx(){
+    if(q.isEmpty)return null;
+    final t=q[qi%q.length];qi=(qi+1)%q.length;return t;
+  }
+  Future<Uint8List?> _rt(String p)async{
+    try{final t=await AudioTags.read(p);if(t!=null&&t.pictures.isNotEmpty)return t.pictures.first.bytes;}catch(_){}
+    return null;
+  }
+  Future<bool> _ld(D d,T t,{bool pl=false})async{
+    _bump(d);final token=_gen(d);final ap=P(d);
+    try{
+      await ap.stop();
+      await ap.setVolume(0);
+      await ap.setFilePath(t.p);
+      if(token!=_gen(d)||_disposed)return false;
+      await ap.seek(const Duration(milliseconds:200));
+      await ap.setSpeed(1);
+      SN(d,t.n);SA(d,null);
+      if(pl){l=d;xv=d==D.a?0:1;await ap.setVolume(1);await ap.play();}
+      if(mounted)setState((){});
+      _rt(t.p).then((bytes){if(!_disposed&&token==_gen(d)){SA(d,bytes);if(mounted)setState((){});}});
+      return true;
+    }catch(_){
+      if(token==_gen(d)){SN(d,null);SA(d,null);try{await ap.stop();}catch(_){}}
+      if(mounted)setState((){});
+      return false;
+    }
+  }
+  Future<void> _as()async{
+    if(q.isEmpty||_disposed)return;
+    if(N(l)==null){
+      final f=_nx();if(f!=null){final ok=await _ld(l,f,pl:true);if(!ok)return;}
+    }
+    if(N(O(l))==null){
+      final f=_nx();if(f!=null)await _ld(O(l),f);
+    }
+  }
+  void _ck(D d,Duration p){
+    if(_disposed||!au||xf||_transitioning||d!=l)return;
+    final ap=P(d),du=ap.duration;
+    if(du==null||!ap.playing)return;
+    final remaining=du-p;
+    final incoming=O(d);
+    if(remaining<=Duration(seconds:15)&&N(incoming)==null){
+      final key=N(d);
+      if(key!=null&&_preparedFor.add(key)){
+        final next=_nx();
+        if(next!=null){_ld(incoming,next).then((ok){if(!ok)_preparedFor.remove(key);});}
+      }
+    }
+    if(remaining<=_fadeLength&&N(incoming)!=null&&P(incoming).duration!=null){
+      _beginFade(d,automatic:true);
+    }else if(remaining<=Duration.zero&&N(incoming)==null){
+      // No next track: leave the player stopped at its natural end.
+      _preparedFor.remove(N(d)??'');
+    }
+  }
+  Future<void> _beginFade(D outgoing,{bool automatic=false})async{
+    if(_disposed||xf||_transitioning||(automatic&&!au))return;
+    final incoming=O(outgoing),sp=P(outgoing),tp=P(incoming);
+    if(N(incoming)==null||tp.duration==null)return;
+    _transitioning=true;xf=true;_fadeTimer?.cancel();
+    try{
+      await tp.setVolume(0);
+      await tp.seek(const Duration(milliseconds:200));
+      await tp.play();
+    }catch(_){
+      _transitioning=false;xf=false;
+      try{await tp.stop();}catch(_){}
+      if(mounted)setState((){});
+      return;
+    }
+    final start=DateTime.now();
+    _fadeTimer=Timer.periodic(const Duration(milliseconds:50),(timer)async{
+      if(_disposed){timer.cancel();return;}
+      final elapsed=DateTime.now().difference(start);
+      final t=(elapsed.inMilliseconds/_fadeLength.inMilliseconds).clamp(0.0,1.0);
+      final out=m.cos(t*m.pi/2),inc=m.sin(t*m.pi/2);
+      xv=outgoing==D.a?t:1-t;
+      try{await sp.setVolume(out);await tp.setVolume(inc);}catch(_){timer.cancel();_transitioning=false;xf=false;return;}
+      if(mounted)setState((){});
+      if(t>=1){
+        timer.cancel();
+        try{await tp.setVolume(1);await sp.setVolume(0);await sp.stop();}catch(_){}
+        SN(outgoing,null);SA(outgoing,null);l=incoming;
+        _preparedFor.remove(N(incoming)??'');
+        _transitioning=false;xf=false;ar=false;
+        if(mounted)setState((){});
+        if(au&&N(O(l))==null){
+          final f=_nx();if(f!=null)await _ld(O(l),f);
+        }
+      }
+    });
+  }
+  Future<void> _tg(D d)async{
+    if(_disposed||_transitioning)return;
+    final pl=P(d);
+    if(pl.playing){await pl.pause();}
+    else if(N(d)==null){
+      final f=_nx();if(f!=null)await _ld(d,f,pl:true);
+    }else if(d!=l){
+      // A loaded inactive deck is an explicit manual transition.
+      await _beginFade(l);
+    }else{
+      try{await pl.play();l=d;xv=d==D.a?0:1;}catch(_){}
+    }
+    if(mounted)setState((){});
+  }
+  Future<void> _pk(D d)async{
+    final r=await FilePicker.platform.pickFiles(type:FileType.audio);
+    if(r==null||_disposed)return;
+    final p=r.files.single.path;if(p==null)return;
+    final target=P(l).playing?O(l):d;
+    await _ld(target,T(p,r.files.single.name),pl:!P(l).playing&&target==l);
+    if(P(l).playing){try{await P(target).setVolume(0);}catch(_){}}
+  }
+  Future<void> _aq()async{
+    final r=await FilePicker.platform.pickFiles(type:FileType.audio,allowMultiple:true);
+    if(r==null||_disposed)return;
+    final tracks=r.files.where((f)=>f.path!=null).map((f)=>T(f.path!,f.name)).toList();
+    if(!mounted)return;setState(()=>q.addAll(tracks));
+    if(au)await _as();
+  }
+  void _qp(){
+    showModalBottomSheet(context:context,builder:(c)=>SafeArea(child:Column(children:[
+      ListTile(title:Text('QUEUE ${q.length} (loops)'),trailing:Row(mainAxisSize:MainAxisSize.min,children:[
+        IconButton(icon:Icon(Icons.add),onPressed:()async{await _aq();if(c.mounted)Navigator.pop(c);if(mounted)_qp();}),
+        IconButton(icon:Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),
+      Expanded(child:ListView.builder(itemCount:q.length,itemBuilder:(x,i)=>ListTile(dense:true,title:Text(q[i].n,overflow:TextOverflow.ellipsis,style:TextStyle(color:N(l)==q[i].n?C:Colors.white)),onTap:()async{
+        Navigator.pop(c);final d=P(l).playing?O(l):l;await _ld(d,q[i],pl:!P(l).playing);
+      })))
+    ])));
+  }
 Widget _dk(D d,bool up)=>Deck(deck:d,pl:P(d),name:N(d)??'No track',art:A(d),live:l==d,next:N(d)!=null&&l!=d,onPlay:()=>_tg(d),onPick:()=>_pk(d),onSeek:(s)async=>await P(d).seek(P(d).position+Duration(seconds:s)),lift:up);
 @override Widget build(BuildContext c)=>Scaffold(backgroundColor:Colors.black,appBar:AppBar(backgroundColor:Colors.black,title:Text('BlendJam'),
 actions:[Text('AUTO',style:TextStyle(fontSize:11)),Switch(value:au,activeColor:C,onChanged:(v)async{setState(()=>au=v);if(v)await _as();}),PopupMenuButton(icon:Icon(Icons.upload_file),itemBuilder:(_)=>[PopupMenuItem(child:Text('Load A'),onTap:()=>_pk(D.a)),PopupMenuItem(child:Text('Load B'),onTap:()=>_pk(D.b)),PopupMenuItem(child:Text('Add Queue'),onTap:()=>_aq())]),IconButton(icon:Icon(Icons.queue_music),onPressed:_qp)]),
