@@ -97,38 +97,58 @@ class S extends State<DJ> {
     final incoming=O(outgoing),sp=P(outgoing),tp=P(incoming);
     final outgoingName=N(outgoing);
     if(N(incoming)==null||tp.duration==null)return;
-    _transitioning=true;xf=true;_fadeTimer?.cancel();
+
+    // Lock before the first await so position events cannot start a second fade.
+    _transitioning=true;
+    xf=true;
+    _fadeTimer?.cancel();
+    final started=DateTime.now();
     try{
       await tp.setVolume(0);
       await tp.seek(const Duration(milliseconds:200));
       await tp.play();
-    }catch(_){
-      _transitioning=false;xf=false;
-      try{await tp.stop();}catch(_){}
-      if(mounted)setState((){});
-      return;
-    }
-    final start=DateTime.now();
-    _fadeTimer=Timer.periodic(const Duration(milliseconds:50),(timer)async{
-      if(_disposed){timer.cancel();return;}
-      final elapsed=DateTime.now().difference(start);
-      final t=(elapsed.inMilliseconds/_fadeLength.inMilliseconds).clamp(0.0,1.0);
-      final out=m.cos(t*m.pi/2),inc=m.sin(t*m.pi/2);
-      xv=outgoing==D.a?t:1-t;
-      try{await sp.setVolume(out);await tp.setVolume(inc);}catch(_){timer.cancel();_transitioning=false;xf=false;return;}
-      if(mounted)setState((){});
-      if(t>=1){
-        timer.cancel();
-        try{await tp.setVolume(1);await sp.setVolume(0);await sp.stop();}catch(_){}
-        SN(outgoing,null);SA(outgoing,null);l=incoming;
-        _preparedFor.remove(outgoingName??'');
-        _transitioning=false;xf=false;ar=false;
+
+      // Use one sequential loop instead of an async Timer.periodic callback.
+      // Timer.periodic can overlap volume writes when platform calls take longer
+      // than the tick interval, causing the mix to stall or jump.
+      while(!_disposed){
+        final elapsed=DateTime.now().difference(started);
+        final t=(elapsed.inMilliseconds/_fadeLength.inMilliseconds).clamp(0.0,1.0).toDouble();
+        final out=m.cos(t*m.pi/2),inc=m.sin(t*m.pi/2);
+        xv=outgoing==D.a?t:1-t;
+
+        await sp.setVolume(out);
+        await tp.setVolume(inc);
         if(mounted)setState((){});
-        if(au&&N(O(l))==null){
-          final f=_nx();if(f!=null)await _ld(O(l),f);
-        }
+        if(t>=1)break;
+        await Future.delayed(const Duration(milliseconds:50));
       }
-    });
+
+      if(_disposed)return;
+      await tp.setVolume(1);
+      await sp.setVolume(0);
+      await sp.stop();
+      SN(outgoing,null);
+      SA(outgoing,null);
+      l=incoming;
+      xv=incoming==D.a?0:1;
+      _preparedFor.remove(outgoingName??'');
+      _transitioning=false;
+      xf=false;
+      ar=false;
+      if(mounted)setState((){});
+
+      // Keep the next deck prepared for uninterrupted alternating playback.
+      if(au&&N(O(l))==null){
+        final f=_nx();
+        if(f!=null)await _ld(O(l),f);
+      }
+    }catch(_){
+      _transitioning=false;
+      xf=false;
+      try{await tp.setVolume(1);}catch(_){}
+      if(mounted)setState((){});
+    }
   }
   Future<void> _tg(D d)async{
     if(_disposed||_transitioning)return;
