@@ -53,7 +53,7 @@ class S extends State<DJ> {
       await ap.seek(const Duration(milliseconds:200));
       await ap.setSpeed(1);
       SN(d,t.n);SA(d,null);
-      if(pl){l=d;xv=d==D.a?0:1;await ap.setVolume(1);await ap.play();}
+      if(pl){l=d;xv=d==D.a?0:1;await ap.setVolume(1);unawaited(ap.play().catchError((Object e){debugPrint('BlendJam deck playback error: $e');}));}
       if(mounted)setState((){});
       _rt(t.p).then((bytes){if(!_disposed&&token==_gen(d)){SA(d,bytes);if(mounted)setState((){});}});
       return true;
@@ -102,11 +102,13 @@ class S extends State<DJ> {
     _transitioning=true;
     xf=true;
     _fadeTimer?.cancel();
-    final started=DateTime.now();
     try{
       await tp.setVolume(0);
       await tp.seek(const Duration(milliseconds:200));
-      await tp.play();
+      // just_audio's play() future can remain pending until playback stops or
+      // completes. Do not await it here: the fade loop must run concurrently.
+      unawaited(tp.play().catchError((Object e){debugPrint('BlendJam incoming deck playback error: $e');}));
+      final started=DateTime.now();
 
       // Use one sequential loop instead of an async Timer.periodic callback.
       // Timer.periodic can overlap volume writes when platform calls take longer
