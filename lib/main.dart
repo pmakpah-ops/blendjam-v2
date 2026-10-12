@@ -155,15 +155,50 @@ class S extends State<DJ> {
   Future<void> _tg(D d)async{
     if(_disposed||_transitioning)return;
     final pl=P(d);
-    if(pl.playing){await pl.pause();}
-    else if(N(d)==null){
+    if(pl.playing){
+      await pl.pause();
+    }else if(N(d)==null){
       final f=_nx();if(f!=null)await _ld(d,f,pl:true);
     }else if(d!=l){
-      // A loaded inactive deck is an explicit manual transition.
-      await _beginFade(l);
+      final active=P(l);
+      if(active.playing){
+        // If the other deck is already playing, transition to the loaded deck.
+        await _beginFade(l);
+      }else{
+        // With Auto Mix off, a loaded deck must still start audibly on demand.
+        try{await active.setVolume(0);}catch(_){}
+        l=d;xv=d==D.a?0:1;
+        try{await pl.setVolume(1);unawaited(pl.play().catchError((Object e){debugPrint('BlendJam manual deck playback error: $e');}));}catch(_){}
+      }
     }else{
-      try{await pl.play();l=d;xv=d==D.a?0:1;}catch(_){}
+      try{
+        l=d;xv=d==D.a?0:1;
+        await pl.setVolume(1);
+        unawaited(pl.play().catchError((Object e){debugPrint('BlendJam manual deck playback error: $e');}));
+      }catch(_){}
     }
+    if(mounted)setState((){});
+  }
+  bool _manualStartingA=false,_manualStartingB=false;
+  Future<void> _manualCrossfade(double v)async{
+    if(xf||_disposed)return;
+    xv=v;
+    final target=v>=0.5?D.b:D.a;
+    try{await a.setVolume(1-v);}catch(_){}
+    try{await b.setVolume(v);}catch(_){}
+    if(N(target)!=null&&!P(target).playing){
+      final pending=target==D.a?_manualStartingA:_manualStartingB;
+      if(!pending){
+        if(target==D.a)_manualStartingA=true;else _manualStartingB=true;
+        try{
+          l=target;
+          unawaited(P(target).play().catchError((Object e){debugPrint('BlendJam manual crossfade playback error: $e');}));
+        }finally{
+          if(target==D.a)_manualStartingA=false;else _manualStartingB=false;
+        }
+      }
+    }
+    if(N(target)!=null)l=target;
     if(mounted)setState((){});
   }
   Future<void> _pk(D d)async{
@@ -194,7 +229,7 @@ class S extends State<DJ> {
 Widget _dk(D d,bool up)=>Deck(deck:d,pl:P(d),name:N(d)??'No track',art:A(d),live:l==d,next:N(d)!=null&&l!=d,onPlay:()=>_tg(d),onPick:()=>_pk(d),onSeek:(s)async=>await P(d).seek(P(d).position+Duration(seconds:s)),lift:up);
 @override Widget build(BuildContext c)=>Scaffold(backgroundColor:Colors.black,appBar:AppBar(backgroundColor:Colors.black,title:Text('BlendJam'),
 actions:[Text('AUTO',style:TextStyle(fontSize:11)),Switch(value:au,activeColor:C,onChanged:(v)async{setState(()=>au=v);if(v)await _as();}),PopupMenuButton(icon:Icon(Icons.upload_file),itemBuilder:(_)=>[PopupMenuItem(child:Text('Load A'),onTap:()=>_pk(D.a)),PopupMenuItem(child:Text('Load B'),onTap:()=>_pk(D.b)),PopupMenuItem(child:Text('Add Queue'),onTap:()=>_aq())]),IconButton(icon:Icon(Icons.queue_music),onPressed:_qp)]),
-body:SafeArea(child:Column(children:[Flexible(child:_dk(D.a,false)),Padding(padding:EdgeInsets.symmetric(horizontal:12,vertical:2),child:Column(children:[Row(children:[Text('A',style:TextStyle(fontSize:12)),Expanded(child:Slider(value:xv,min:0,max:1,activeColor:C,onChanged:(v){if(xf)return;xv=v;try{a.setVolume(1-v);}catch(_){}try{b.setVolume(v);}catch(_){}if(v>=0.5&&N(D.b)!=null)l=D.b;if(v<0.5&&N(D.a)!=null)l=D.a;setState((){});})),Text('B',style:TextStyle(fontSize:12))]),Text(xf?'MIXING ${(xv*100).toInt()}%':'',style:TextStyle(color:C,fontSize:11))])),Flexible(child:_dk(D.b,true))])));}
+body:SafeArea(child:Column(children:[Flexible(child:_dk(D.a,false)),Padding(padding:EdgeInsets.symmetric(horizontal:12,vertical:2),child:Column(children:[Row(children:[Text('A',style:TextStyle(fontSize:12)),Expanded(child:Slider(value:xv,min:0,max:1,activeColor:C,onChanged:(v)=>unawaited(_manualCrossfade(v)))),Text('B',style:TextStyle(fontSize:12))]),Text(xf?'MIXING ${(xv*100).toInt()}%':'',style:TextStyle(color:C,fontSize:11))])),Flexible(child:_dk(D.b,true))])));}
 class Deck extends StatefulWidget{final D deck;final AudioPlayer pl;final String name;final Uint8List?art;final bool live,next,lift;final VoidCallback onPlay,onPick;final Future<void> Function(int)onSeek;const Deck({super.key,required this.deck,required this.pl,required this.name,required this.art,required this.live,required this.next,required this.onPlay,required this.onPick,required this.onSeek,required this.lift});@override State<Deck>createState()=>DD();}
 class DD extends State<Deck> with TickerProviderStateMixin{late AnimationController an,rg;StreamSubscription<bool>?ps;@override void initState(){super.initState();an=AnimationController(vsync:this,duration:Duration(seconds:3));rg=AnimationController(vsync:this,duration:Duration(seconds:5));ps=widget.pl.playingStream.listen((p){if(!mounted)return;if(p){an.repeat();rg.repeat();}else{an.stop();rg.stop();}});} @override void dispose(){ps?.cancel();an.dispose();rg.dispose();super.dispose();}
 String _f(Duration d)=>'${d.inMinutes.remainder(60).toString().padLeft(2,'0')}:${(d.inSeconds%60).toString().padLeft(2,'0')}';
