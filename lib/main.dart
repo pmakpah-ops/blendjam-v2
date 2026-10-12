@@ -73,7 +73,7 @@ class S extends State<DJ> {
     }
   }
   void _ck(D d,Duration p){
-    if(_disposed||!au||xf||_transitioning||d!=l)return;
+    if(_disposed||xf||_transitioning||d!=l)return;
     final ap=P(d),du=ap.duration;
     if(du==null||!ap.playing)return;
     final remaining=du-p;
@@ -93,7 +93,7 @@ class S extends State<DJ> {
     }
   }
   Future<void> _beginFade(D outgoing,{bool automatic=false})async{
-    if(_disposed||xf||_transitioning||(automatic&&!au))return;
+    if(_disposed||xf||_transitioning)return;
     final incoming=O(outgoing),sp=P(outgoing),tp=P(incoming);
     final outgoingName=N(outgoing);
     if(N(incoming)==null||tp.duration==null)return;
@@ -141,7 +141,7 @@ class S extends State<DJ> {
       if(mounted)setState((){});
 
       // Keep the next deck prepared for uninterrupted alternating playback.
-      if(au&&N(O(l))==null){
+      if(N(O(l))==null){
         final f=_nx();
         if(f!=null)await _ld(O(l),f);
       }
@@ -182,22 +182,24 @@ class S extends State<DJ> {
   bool _manualStartingA=false,_manualStartingB=false;
   Future<void> _manualCrossfade(double v)async{
     if(xf||_disposed)return;
-    xv=v;
-    final target=v>=0.5?D.b:D.a;
-    try{await a.setVolume(1-v);}catch(_){}
-    try{await b.setVolume(v);}catch(_){}
-    if(N(target)!=null&&!P(target).playing){
-      final pending=target==D.a?_manualStartingA:_manualStartingB;
-      if(!pending){
-        if(target==D.a)_manualStartingA=true;else _manualStartingB=true;
-        try{
-          l=target;
-          unawaited(P(target).play().catchError((Object e){debugPrint('BlendJam manual crossfade playback error: $e');}));
-        }finally{
-          if(target==D.a)_manualStartingA=false;else _manualStartingB=false;
-        }
-      }
+    final value=v.clamp(0.0,1.0).toDouble();
+    xv=value;
+    // Any movement toward a loaded deck starts that deck, not only movement
+    // past the midpoint. This makes the fader itself the manual start control.
+    final startA=value<1.0&&na!=null&&!a.playing;
+    final startB=value>0.0&&nb!=null&&!b.playing;
+    try{await a.setVolume(1-value);}catch(_){}
+    try{await b.setVolume(value);}catch(_){}
+    if(startA&&!_manualStartingA){
+      _manualStartingA=true;
+      unawaited(a.play().catchError((Object e){debugPrint('BlendJam manual deck A playback error: $e');}).whenComplete(()=>_manualStartingA=false));
     }
+    if(startB&&!_manualStartingB){
+      _manualStartingB=true;
+      unawaited(b.play().catchError((Object e){debugPrint('BlendJam manual deck B playback error: $e');}).whenComplete(()=>_manualStartingB=false));
+    }
+    // Keep the logical active deck aligned with the louder side of the mix.
+    final target=value>=0.5?D.b:D.a;
     if(N(target)!=null)l=target;
     if(mounted)setState((){});
   }
@@ -206,7 +208,8 @@ class S extends State<DJ> {
     if(r==null||_disposed)return;
     final p=r.files.single.path;if(p==null)return;
     final target=P(l).playing?O(l):d;
-    await _ld(target,T(p,r.files.single.name),pl:!P(l).playing&&target==l);
+    // If neither deck is playing, a file picked for either deck should start audibly.
+    await _ld(target,T(p,r.files.single.name),pl:!P(l).playing);
     if(P(l).playing){try{await P(target).setVolume(0);}catch(_){}}
   }
   Future<void> _aq()async{
