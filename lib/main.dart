@@ -1,28 +1,238 @@
 import 'dart:async';import 'dart:math' as m;import 'dart:typed_data';import 'package:audiotags/audiotags.dart';import 'package:file_picker/file_picker.dart';import 'package:flutter/material.dart';import 'package:just_audio/just_audio.dart';
 void main()=>runApp(MaterialApp(theme:ThemeData.dark(),home:DJ()));class T{String p,n;T(this.p,this.n);}enum D{a,b}
-class DJ extends StatefulWidget{const DJ({super.key});@override State<DJ>createState()=>S();}
-class S extends State<DJ>{static const C=Color(0xFFCEBBFF);final a=AudioPlayer(),b=AudioPlayer();String?na,nb;Uint8List?aa,ab;D l=D.a;bool au=false,xf=false,ar=false;double xv=0;List<T>q=[];int qi=0;
-P(d)=>d==D.a?a:b;O(d)=>d==D.a?D.b:D.a;N(d)=>d==D.a?na:nb;A(d)=>d==D.a?aa:ab;SN(d,v){d==D.a?na=v:nb=v;}SA(d,v){d==D.a?aa=v:ab=v;}
-@override void initState(){super.initState();a.positionStream.listen((p)=>_ck(D.a,p));b.positionStream.listen((p)=>_ck(D.b,p));}
-@override void dispose(){a.dispose();b.dispose();super.dispose();}
-T?_nx(){if(q.isEmpty)return null;var t=q[qi%q.length];qi=(qi+1)%q.length;return t;}
-Future<Uint8List?>_rt(String p)async{try{var t=await AudioTags.read(p);if(t!=null&&t.pictures.isNotEmpty)return t.pictures.first.bytes;}catch(_){}return null;}
-Future _ld(D d,T t,{bool pl=false})async{SN(d,t.n);SA(d,null);if(mounted)setState((){});var ap=P(d);try{await ap.stop();await ap.setFilePath(t.p);await ap.seek(const Duration(milliseconds:200));await ap.setVolume(pl?1:0);await ap.setSpeed(1);}catch(_){}
-_rt(t.p).then((b){SA(d,b);if(mounted)setState((){});});if(pl){l=d;xv=d==D.a?0:1;try{await ap.play();}catch(_){}}if(mounted)setState((){});}
-Future _as()async{if(q.isEmpty)return;if(N(l)==null){var f=_nx();if(f!=null)await _ld(l,f,pl:true);}if(N(O(l))==null){var f=_nx();if(f!=null)await _ld(O(l),f);}}
-void _ck(D d,Duration p){if(xf||ar)return;if(d!=l)return;var du=P(d).duration;if(du==null||!P(d).playing)return;var r=du-p;
-if(au&&r.inSeconds==15&&N(O(l))==null){var f=_nx();if(f!=null)_ld(O(l),f);}if(r.inSeconds<=10&&N(D.a)!=null&&N(D.b)!=null){ar=true;_fd();}}
-void _fd(){if(xf)return;var s=l,t=O(s);if(N(t)==null){ar=false;return;}xf=true;var sp=P(s),tp=P(t);tp.setVolume(0);tp.play();
-int k=0;Timer.periodic(const Duration(milliseconds:60),(tm){k++;double lin=k/100;if(lin>1)lin=1;double av=m.cos(lin*m.pi/2),bv=m.sin(lin*m.pi/2);xv=s==D.a?lin:1-lin;
-sp.setVolume(av);tp.setVolume(bv);if(mounted)setState((){});if(k>=100){tm.cancel();xv=s==D.a?1:0;sp.setVolume(0);tp.setVolume(1);sp.stop();SN(s,null);SA(s,null);l=t;xf=false;ar=false;if(mounted)setState((){});if(au&&N(O(l))==null){var f=_nx();if(f!=null)_ld(O(l),f);}}});}
-Future _tg(D d)async{if(xf)return;var pl=P(d);if(pl.playing)await pl.pause();else{if(N(d)==null){var f=_nx();if(f!=null)await _ld(d,f,pl:true);}else if(d!=l)_fd();else{try{await pl.play();l=d;xv=d==D.a?0:1;}catch(_){}}}if(mounted)setState((){});}
-Future _pk(D d)async{var r=await FilePicker.platform.pickFiles(type:FileType.audio);if(r==null)return;var p=r.files.single.path;if(p!=null){var tg=P(l).playing?O(l):d;await _ld(tg,T(p,r.files.single.name),pl:!P(l).playing&&tg==l);if(P(l).playing)try{await P(tg).setVolume(0);}catch(_){}}}
-Future _aq()async{var r=await FilePicker.platform.pickFiles(type:FileType.audio,allowMultiple:true);if(r==null)return;setState(()=>q.addAll(r.files.where((f)=>f.path!=null).map((f)=>T(f.path!,f.name))));if(au)await _as();}
-void _qp(){showModalBottomSheet(context:context,builder:(c)=>SafeArea(child:Column(children:[ListTile(title:Text('QUEUE ${q.length} (loops)'),trailing:Row(mainAxisSize:MainAxisSize.min,children:[IconButton(icon:Icon(Icons.add),onPressed:()async{await _aq();Navigator.pop(c);_qp();}),IconButton(icon:Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),Expanded(child:ListView.builder(itemCount:q.length,itemBuilder:(x,i)=>ListTile(dense:true,title:Text(q[i].n,overflow:TextOverflow.ellipsis,style:TextStyle(color:N(l)==q[i].n?C:Colors.white)),onTap:()async{Navigator.pop(c);var d=P(l).playing?O(l):l;await _ld(d,q[i],pl:!P(l).playing);}))) ])));}
+class DJ extends StatefulWidget {
+  const DJ({super.key});
+  @override State<DJ> createState()=>S();
+}
+class S extends State<DJ> {
+  static const C=Color(0xFFCEBBFF);
+  static const _fadeLength=Duration(seconds:10);
+  final a=AudioPlayer(), b=AudioPlayer();
+  String? na,nb; Uint8List? aa,ab;
+  D l=D.a; bool au=false,xf=false,ar=false;
+  double xv=0; List<T> q=[]; int qi=0;
+  StreamSubscription<Duration>? _posA,_posB;
+  Timer? _fadeTimer;
+  bool _disposed=false,_transitioning=false;
+  int _generationA=0,_generationB=0;
+  final Set<String> _preparedFor= <String>{};
+
+  AudioPlayer P(D d)=>d==D.a?a:b;
+  D O(D d)=>d==D.a?D.b:D.a;
+  String? N(D d)=>d==D.a?na:nb;
+  Uint8List? A(D d)=>d==D.a?aa:ab;
+  void SN(D d,String? v){if(d==D.a)na=v;else nb=v;}
+  void SA(D d,Uint8List? v){if(d==D.a)aa=v;else ab=v;}
+  int _gen(D d)=>d==D.a?_generationA:_generationB;
+  void _bump(D d){if(d==D.a)_generationA++;else _generationB++;}
+  @override void initState(){
+    super.initState();
+    _posA=a.positionStream.listen((p)=>_ck(D.a,p));
+    _posB=b.positionStream.listen((p)=>_ck(D.b,p));
+  }
+  @override void dispose(){
+    _disposed=true;_fadeTimer?.cancel();
+    _posA?.cancel();_posB?.cancel();
+    a.dispose();b.dispose();super.dispose();
+  }
+  T? _nx(){
+    if(q.isEmpty)return null;
+    final t=q[qi%q.length];qi=(qi+1)%q.length;return t;
+  }
+  Future<Uint8List?> _rt(String p)async{
+    try{final t=await AudioTags.read(p);if(t!=null&&t.pictures.isNotEmpty)return t.pictures.first.bytes;}catch(_){}
+    return null;
+  }
+  Future<bool> _ld(D d,T t,{bool pl=false})async{
+    _bump(d);final token=_gen(d);final ap=P(d);
+    try{
+      await ap.stop();
+      await ap.setVolume(0);
+      await ap.setFilePath(t.p);
+      if(token!=_gen(d)||_disposed)return false;
+      await ap.seek(const Duration(milliseconds:200));
+      await ap.setSpeed(1);
+      SN(d,t.n);SA(d,null);
+      if(pl){l=d;xv=d==D.a?0:1;await ap.setVolume(1);unawaited(ap.play().catchError((Object e){debugPrint('BlendJam deck playback error: $e');}));}
+      if(mounted)setState((){});
+      _rt(t.p).then((bytes){if(!_disposed&&token==_gen(d)){SA(d,bytes);if(mounted)setState((){});}});
+      return true;
+    }catch(_){
+      if(token==_gen(d)){SN(d,null);SA(d,null);try{await ap.stop();}catch(_){}}
+      if(mounted)setState((){});
+      return false;
+    }
+  }
+  Future<void> _as()async{
+    if(q.isEmpty||_disposed)return;
+    if(N(l)==null){
+      final f=_nx();if(f!=null){final ok=await _ld(l,f,pl:true);if(!ok)return;}
+    }
+    if(N(O(l))==null){
+      final f=_nx();if(f!=null)await _ld(O(l),f);
+    }
+  }
+  void _ck(D d,Duration p){
+    if(_disposed||xf||_transitioning||d!=l)return;
+    final ap=P(d),du=ap.duration;
+    if(du==null||!ap.playing)return;
+    final remaining=du-p;
+    final incoming=O(d);
+    if(remaining<=Duration(seconds:15)&&N(incoming)==null){
+      final key=N(d);
+      if(key!=null&&_preparedFor.add(key)){
+        final next=_nx();
+        if(next!=null){_ld(incoming,next).then((ok){if(!ok)_preparedFor.remove(key);});}
+      }
+    }
+    if(remaining<=_fadeLength&&N(incoming)!=null&&P(incoming).duration!=null){
+      _beginFade(d,automatic:true);
+    }else if(remaining<=Duration.zero&&N(incoming)==null){
+      // No next track: leave the player stopped at its natural end.
+      _preparedFor.remove(N(d)??'');
+    }
+  }
+  Future<void> _beginFade(D outgoing,{bool automatic=false})async{
+    if(_disposed||xf||_transitioning)return;
+    final incoming=O(outgoing),sp=P(outgoing),tp=P(incoming);
+    final outgoingName=N(outgoing);
+    if(N(incoming)==null||tp.duration==null)return;
+
+    // Lock before the first await so position events cannot start a second fade.
+    _transitioning=true;
+    xf=true;
+    _fadeTimer?.cancel();
+    try{
+      await tp.setVolume(0);
+      await tp.seek(const Duration(milliseconds:200));
+      // just_audio's play() future can remain pending until playback stops or
+      // completes. Do not await it here: the fade loop must run concurrently.
+      unawaited(tp.play().catchError((Object e){debugPrint('BlendJam incoming deck playback error: $e');}));
+      final started=DateTime.now();
+
+      // Use one sequential loop instead of an async Timer.periodic callback.
+      // Timer.periodic can overlap volume writes when platform calls take longer
+      // than the tick interval, causing the mix to stall or jump.
+      while(!_disposed){
+        final elapsed=DateTime.now().difference(started);
+        final t=(elapsed.inMilliseconds/_fadeLength.inMilliseconds).clamp(0.0,1.0).toDouble();
+        final out=m.cos(t*m.pi/2),inc=m.sin(t*m.pi/2);
+        xv=outgoing==D.a?t:1-t;
+
+        await sp.setVolume(out);
+        await tp.setVolume(inc);
+        if(mounted)setState((){});
+        if(t>=1)break;
+        await Future.delayed(const Duration(milliseconds:50));
+      }
+
+      if(_disposed)return;
+      await tp.setVolume(1);
+      await sp.setVolume(0);
+      await sp.stop();
+      SN(outgoing,null);
+      SA(outgoing,null);
+      l=incoming;
+      xv=incoming==D.a?0:1;
+      _preparedFor.remove(outgoingName??'');
+      _transitioning=false;
+      xf=false;
+      ar=false;
+      if(mounted)setState((){});
+
+      // Keep the next deck prepared for uninterrupted alternating playback.
+      if(N(O(l))==null){
+        final f=_nx();
+        if(f!=null)await _ld(O(l),f);
+      }
+    }catch(_){
+      _transitioning=false;
+      xf=false;
+      try{await tp.setVolume(1);}catch(_){}
+      if(mounted)setState((){});
+    }
+  }
+  Future<void> _tg(D d)async{
+    if(_disposed||_transitioning)return;
+    final pl=P(d);
+    if(pl.playing){
+      await pl.pause();
+    }else if(N(d)==null){
+      final f=_nx();if(f!=null)await _ld(d,f,pl:true);
+    }else if(d!=l){
+      final active=P(l);
+      if(active.playing){
+        // If the other deck is already playing, transition to the loaded deck.
+        await _beginFade(l);
+      }else{
+        // With Auto Mix off, a loaded deck must still start audibly on demand.
+        try{await active.setVolume(0);}catch(_){}
+        l=d;xv=d==D.a?0:1;
+        try{await pl.setVolume(1);unawaited(pl.play().catchError((Object e){debugPrint('BlendJam manual deck playback error: $e');}));}catch(_){}
+      }
+    }else{
+      try{
+        l=d;xv=d==D.a?0:1;
+        await pl.setVolume(1);
+        unawaited(pl.play().catchError((Object e){debugPrint('BlendJam manual deck playback error: $e');}));
+      }catch(_){}
+    }
+    if(mounted)setState((){});
+  }
+  bool _manualStartingA=false,_manualStartingB=false;
+  Future<void> _manualCrossfade(double v)async{
+    if(xf||_disposed)return;
+    final value=v.clamp(0.0,1.0).toDouble();
+    xv=value;
+    // Any movement toward a loaded deck starts that deck, not only movement
+    // past the midpoint. This makes the fader itself the manual start control.
+    final startA=value<1.0&&na!=null&&!a.playing;
+    final startB=value>0.0&&nb!=null&&!b.playing;
+    try{await a.setVolume(1-value);}catch(_){}
+    try{await b.setVolume(value);}catch(_){}
+    if(startA&&!_manualStartingA){
+      _manualStartingA=true;
+      unawaited(a.play().catchError((Object e){debugPrint('BlendJam manual deck A playback error: $e');}).whenComplete(()=>_manualStartingA=false));
+    }
+    if(startB&&!_manualStartingB){
+      _manualStartingB=true;
+      unawaited(b.play().catchError((Object e){debugPrint('BlendJam manual deck B playback error: $e');}).whenComplete(()=>_manualStartingB=false));
+    }
+    // Keep the logical active deck aligned with the louder side of the mix.
+    final target=value>=0.5?D.b:D.a;
+    if(N(target)!=null)l=target;
+    if(mounted)setState((){});
+  }
+  Future<void> _pk(D d)async{
+    final r=await FilePicker.platform.pickFiles(type:FileType.audio);
+    if(r==null||_disposed)return;
+    final p=r.files.single.path;if(p==null)return;
+    final target=P(l).playing?O(l):d;
+    // If neither deck is playing, a file picked for either deck should start audibly.
+    await _ld(target,T(p,r.files.single.name),pl:!P(l).playing);
+    if(P(l).playing){try{await P(target).setVolume(0);}catch(_){}}
+  }
+  Future<void> _aq()async{
+    final r=await FilePicker.platform.pickFiles(type:FileType.audio,allowMultiple:true);
+    if(r==null||_disposed)return;
+    final tracks=r.files.where((f)=>f.path!=null).map((f)=>T(f.path!,f.name)).toList();
+    if(!mounted)return;setState(()=>q.addAll(tracks));
+    if(au)await _as();
+  }
+  void _qp(){
+    showModalBottomSheet(context:context,builder:(c)=>SafeArea(child:Column(children:[
+      ListTile(title:Text('QUEUE ${q.length} (loops)'),trailing:Row(mainAxisSize:MainAxisSize.min,children:[
+        IconButton(icon:Icon(Icons.add),onPressed:()async{await _aq();if(c.mounted)Navigator.pop(c);if(mounted)_qp();}),
+        IconButton(icon:Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),
+      Expanded(child:ListView.builder(itemCount:q.length,itemBuilder:(x,i)=>ListTile(dense:true,title:Text(q[i].n,overflow:TextOverflow.ellipsis,style:TextStyle(color:N(l)==q[i].n?C:Colors.white)),onTap:()async{
+        Navigator.pop(c);final d=P(l).playing?O(l):l;await _ld(d,q[i],pl:!P(l).playing);
+      })))
+    ])));
+  }
 Widget _dk(D d,bool up)=>Deck(deck:d,pl:P(d),name:N(d)??'No track',art:A(d),live:l==d,next:N(d)!=null&&l!=d,onPlay:()=>_tg(d),onPick:()=>_pk(d),onSeek:(s)async=>await P(d).seek(P(d).position+Duration(seconds:s)),lift:up);
 @override Widget build(BuildContext c)=>Scaffold(backgroundColor:Colors.black,appBar:AppBar(backgroundColor:Colors.black,title:Text('BlendJam'),
 actions:[Text('AUTO',style:TextStyle(fontSize:11)),Switch(value:au,activeColor:C,onChanged:(v)async{setState(()=>au=v);if(v)await _as();}),PopupMenuButton(icon:Icon(Icons.upload_file),itemBuilder:(_)=>[PopupMenuItem(child:Text('Load A'),onTap:()=>_pk(D.a)),PopupMenuItem(child:Text('Load B'),onTap:()=>_pk(D.b)),PopupMenuItem(child:Text('Add Queue'),onTap:()=>_aq())]),IconButton(icon:Icon(Icons.queue_music),onPressed:_qp)]),
-body:SafeArea(child:Column(children:[Flexible(child:_dk(D.a,false)),Padding(padding:EdgeInsets.symmetric(horizontal:12,vertical:2),child:Column(children:[Row(children:[Text('A',style:TextStyle(fontSize:12)),Expanded(child:Slider(value:xv,min:0,max:1,activeColor:C,onChanged:(v){if(xf)return;xv=v;try{a.setVolume(1-v);}catch(_){}try{b.setVolume(v);}catch(_){}if(v>=0.5&&N(D.b)!=null)l=D.b;if(v<0.5&&N(D.a)!=null)l=D.a;setState((){});})),Text('B',style:TextStyle(fontSize:12))]),Text(xf?'MIXING ${(xv*100).toInt()}%':'',style:TextStyle(color:C,fontSize:11))])),Flexible(child:_dk(D.b,true))])));}
+body:SafeArea(child:Column(children:[Flexible(child:_dk(D.a,false)),Padding(padding:EdgeInsets.symmetric(horizontal:12,vertical:2),child:Column(children:[Row(children:[Text('A',style:TextStyle(fontSize:12)),Expanded(child:Slider(value:xv,min:0,max:1,activeColor:C,onChanged:(v)=>unawaited(_manualCrossfade(v)))),Text('B',style:TextStyle(fontSize:12))]),Text(xf?'MIXING ${(xv*100).toInt()}%':'',style:TextStyle(color:C,fontSize:11))])),Flexible(child:_dk(D.b,true))])));}
 class Deck extends StatefulWidget{final D deck;final AudioPlayer pl;final String name;final Uint8List?art;final bool live,next,lift;final VoidCallback onPlay,onPick;final Future<void> Function(int)onSeek;const Deck({super.key,required this.deck,required this.pl,required this.name,required this.art,required this.live,required this.next,required this.onPlay,required this.onPick,required this.onSeek,required this.lift});@override State<Deck>createState()=>DD();}
 class DD extends State<Deck> with TickerProviderStateMixin{late AnimationController an,rg;StreamSubscription<bool>?ps;@override void initState(){super.initState();an=AnimationController(vsync:this,duration:Duration(seconds:3));rg=AnimationController(vsync:this,duration:Duration(seconds:5));ps=widget.pl.playingStream.listen((p){if(!mounted)return;if(p){an.repeat();rg.repeat();}else{an.stop();rg.stop();}});} @override void dispose(){ps?.cancel();an.dispose();rg.dispose();super.dispose();}
 String _f(Duration d)=>'${d.inMinutes.remainder(60).toString().padLeft(2,'0')}:${(d.inSeconds%60).toString().padLeft(2,'0')}';
