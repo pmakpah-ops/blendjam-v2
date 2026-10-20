@@ -10,7 +10,7 @@ class S extends State<DJ> {
   final a=AudioPlayer(), b=AudioPlayer();
   String? na,nb; Uint8List? aa,ab;
   D l=D.a; bool au=false,xf=false,ar=false;
-  double xv=0; List<T> q=[]; int qi=0; List<Map<String,dynamic>> crates=[];
+  double xv=0; List<T> q=[]; int qi=0; List<Map<String,dynamic>> crates=[]; List<T> recent=[]; String? lastFolder;
   StreamSubscription<Duration>? _posA,_posB;
   Timer? _fadeTimer;
   bool _disposed=false,_transitioning=false;
@@ -30,6 +30,7 @@ class S extends State<DJ> {
     _posA=a.positionStream.listen((p)=>_ck(D.a,p));
     _posB=b.positionStream.listen((p)=>_ck(D.b,p));
     unawaited(_loadCrates());
+    unawaited(_loadRecent());
   }
   @override void dispose(){
     _disposed=true;_fadeTimer?.cancel();
@@ -37,6 +38,9 @@ class S extends State<DJ> {
     a.dispose();b.dispose();super.dispose();
   }
   Future<void> _loadCrates()async{try{final prefs=await SharedPreferences.getInstance();final raw=prefs.getString('blendjam_crates_v1');if(raw==null)return;final decoded=jsonDecode(raw);if(decoded is List){crates=decoded.whereType<Map>().map((e)=>Map<String,dynamic>.from(e)).where((e)=>e['name'] is String&&e['tracks'] is List).take(5).toList();if(mounted)setState((){});}}catch(e){debugPrint('BlendJam crates load error: $e');}}
+  Future<void> _loadRecent()async{try{final prefs=await SharedPreferences.getInstance();lastFolder=prefs.getString('blendjam_last_folder_v1');final raw=prefs.getString('blendjam_recent_v1');if(raw!=null){final decoded=jsonDecode(raw);if(decoded is List){recent=decoded.whereType<Map>().map((e)=>T(e['p'] as String,e['n'] as String)).take(20).toList();}}if(mounted)setState((){});}catch(e){debugPrint('BlendJam recent load error: $e');}}
+  Future<void> _rememberTracks(List<T> tracks)async{try{for(final t in tracks){recent.removeWhere((x)=>x.p==t.p);recent.insert(0,t);}if(recent.length>20)recent=recent.take(20).toList();if(tracks.isNotEmpty){lastFolder=File(tracks.first.p).parent.path;}final prefs=await SharedPreferences.getInstance();await prefs.setString('blendjam_recent_v1',jsonEncode(recent.map((t)=>{'p':t.p,'n':t.n}).toList()));if(lastFolder!=null)await prefs.setString('blendjam_last_folder_v1',lastFolder!);}catch(e){debugPrint('BlendJam recent save error: $e');}}
+  Future<void> _loadRecentQueue({bool shuffle=false})async{final tracks=<T>[];for(final t in recent){try{if(await File(t.p).exists())tracks.add(t);}catch(_){}}if(shuffle)tracks.shuffle();if(tracks.isEmpty){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No recent songs are currently available.')));return;}setState((){q=tracks;qi=0;});if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('${tracks.length}/${recent.length} recent songs available')));final playing=P(l).playing;if(playing){await _ld(O(l),tracks.first);}else{await _ld(l,tracks.first,pl:true);if(tracks.length>1)await _ld(O(l),tracks[1]);if(mounted)setState(()=>qi=tracks.length>1?1:0);}}
   Future<void> _saveCrates()async{try{final prefs=await SharedPreferences.getInstance();await prefs.setString('blendjam_crates_v1',jsonEncode(crates));}catch(e){debugPrint('BlendJam crates save error: $e');}}
   Future<void> _saveQueueAsCrate()async{
     if(q.isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Add songs to the queue first.')));return;}
@@ -238,19 +242,20 @@ class S extends State<DJ> {
     final p=r.files.single.path;if(p==null)return;
     final target=P(l).playing?O(l):d;
     // If neither deck is playing, a file picked for either deck should start audibly.
-    await _ld(target,T(p,r.files.single.name),pl:!P(l).playing);
+    final picked=T(p,r.files.single.name);await _rememberTracks([picked]);await _ld(target,picked,pl:!P(l).playing);
     if(P(l).playing){try{await P(target).setVolume(0);}catch(_){}}
   }
   Future<void> _aq()async{
     final r=await FilePicker.platform.pickFiles(type:FileType.audio,allowMultiple:true);
     if(r==null||_disposed)return;
     final tracks=r.files.where((f)=>f.path!=null).map((f)=>T(f.path!,f.name)).toList();
-    if(!mounted)return;setState(()=>q.addAll(tracks));
+    if(!mounted)return;await _rememberTracks(tracks);setState(()=>q.addAll(tracks));
     if(au)await _as();
   }
   void _qp(){
     showModalBottomSheet(context:context,builder:(c)=>SafeArea(child:Column(children:[
       Padding(padding:const EdgeInsets.fromLTRB(16,12,8,4),child:Row(children:[Expanded(child:Text('MY CRATES ${crates.length}/5',style:const TextStyle(fontWeight:FontWeight.bold))),IconButton(tooltip:'Save current queue as crate',icon:const Icon(Icons.bookmark_add),onPressed:()=>_saveQueueAsCrate()),IconButton(tooltip:'Close',icon:const Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),
+      if(recent.isNotEmpty) ListTile(dense:true,leading:const Icon(Icons.history),title:const Text('Recent 20 Songs'),subtitle:Text(lastFolder==null?'Saved locally':'Last folder: $lastFolder',maxLines:1,overflow:TextOverflow.ellipsis),onTap:(){Navigator.pop(c);_loadRecentQueue();},trailing:IconButton(tooltip:'Shuffle recent songs',icon:const Icon(Icons.shuffle),onPressed:(){Navigator.pop(c);_loadRecentQueue(shuffle:true);})),
       if(crates.isNotEmpty) SizedBox(height:crates.length>2?150:null,child:ListView(shrinkWrap:crates.length<=2,children:List.generate(crates.length,(i){final cr=crates[i];final count=((cr['tracks'] as List?)??[]).length;return ListTile(dense:true,leading:const Icon(Icons.library_music),title:Text('${cr['name']}',overflow:TextOverflow.ellipsis),subtitle:Text('$count/20 saved songs'),onTap:()async{Navigator.pop(c);await _loadCrate(i);},trailing:PopupMenuButton<String>(onSelected:(v){if(v=='shuffle'){Navigator.pop(c);_loadCrate(i,shuffle:true);}else if(v=='delete'){_deleteCrate(i);}},itemBuilder:(_)=>const [PopupMenuItem(value:'shuffle',child:Text('Load shuffled')),PopupMenuItem(value:'delete',child:Text('Delete crate'))]))}))),
       ListTile(title:Text('QUEUE ${q.length} (loops)'),trailing:Row(mainAxisSize:MainAxisSize.min,children:[
         IconButton(icon:Icon(Icons.add),onPressed:()async{await _aq();if(c.mounted)Navigator.pop(c);if(mounted)_qp();}),
