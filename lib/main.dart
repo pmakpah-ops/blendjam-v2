@@ -56,13 +56,12 @@ class S extends State<DJ> {
     if(tracks.isEmpty){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No saved songs are currently available in this crate.')));return;}
     if(shuffle)tracks.shuffle();
     if(!mounted)return;
-    setState((){q=tracks;qi=0;});
+    setState((){q=tracks;qi=tracks.length>1?1:0;});
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('${tracks.length}/${raw.length} songs available')));
-    if(au){await _as();}else{
-      final d=P(l).playing?O(l):l;
-      await _ld(d,tracks.first,pl:!P(l).playing);
-      if(tracks.length>1&&mounted)setState(()=>qi=1);
-    }
+    final playing=P(l).playing;
+    if(playing){await _ld(O(l),tracks.first);if(au){} }
+    else{await _ld(l,tracks.first,pl:true);if(tracks.length>1)await _ld(O(l),tracks[1]);}
+    if(mounted)setState((){});
   }
   Future<void> _deleteCrate(int index)async{if(index<0||index>=crates.length)return;final name=crates[index]['name'];final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Delete crate?'),content:Text('Delete "$name"? The original music files will not be deleted.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('CANCEL')),TextButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('DELETE'))]));if(ok==true&&mounted){setState(()=>crates.removeAt(index));await _saveCrates();}}
   T? _nx(){
