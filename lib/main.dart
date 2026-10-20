@@ -256,7 +256,41 @@ class S extends State<DJ> {
     showModalBottomSheet(context:context,builder:(c)=>SafeArea(child:Column(children:[
       Padding(padding:const EdgeInsets.fromLTRB(16,12,8,4),child:Row(children:[Expanded(child:Text('MY CRATES ${crates.length}/5',style:const TextStyle(fontWeight:FontWeight.bold))),IconButton(tooltip:'Save current queue as crate',icon:const Icon(Icons.bookmark_add),onPressed:()=>_saveQueueAsCrate()),IconButton(tooltip:'Close',icon:const Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),
       if(recent.isNotEmpty) ListTile(dense:true,leading:const Icon(Icons.history),title:const Text('Recent 20 Songs'),subtitle:Text(lastFolder==null?'Saved locally':'Last folder: $lastFolder',maxLines:1,overflow:TextOverflow.ellipsis),onTap:(){Navigator.pop(c);_loadRecentQueue();},trailing:IconButton(tooltip:'Shuffle recent songs',icon:const Icon(Icons.shuffle),onPressed:(){Navigator.pop(c);_loadRecentQueue(shuffle:true);})),
-      if(crates.isNotEmpty) SizedBox(height:crates.length>2?150:null,child:ListView(shrinkWrap:crates.length<=2,children:List.generate(crates.length,(i){final cr=crates[i];final count=((cr['tracks'] as List?)??[]).length;return ListTile(dense:true,leading:const Icon(Icons.library_music),title:Text('${cr['name']}',overflow:TextOverflow.ellipsis),subtitle:Text('$count/20 saved songs'),onTap:()async{Navigator.pop(c);await _loadCrate(i);},trailing:PopupMenuButton<String>(onSelected:(v){if(v=='shuffle'){Navigator.pop(c);_loadCrate(i,shuffle:true);}else if(v=='delete'){_deleteCrate(i);}},itemBuilder:(_)=>const [PopupMenuItem(value:'shuffle',child:Text('Load shuffled')),PopupMenuItem(value:'delete',child:Text('Delete crate'))]))}))),
+      if (crates.isNotEmpty)
+        SizedBox(
+          height: crates.length > 2 ? 150 : null,
+          child: ListView(
+            shrinkWrap: crates.length <= 2,
+            children: List.generate(crates.length, (i) {
+              final cr = crates[i];
+              final count = ((cr['tracks'] as List?) ?? []).length;
+              return ListTile(
+                dense: true,
+                leading: const Icon(Icons.library_music),
+                title: Text('${cr['name']}', overflow: TextOverflow.ellipsis),
+                subtitle: Text('$count/20 saved songs'),
+                onTap: () async {
+                  Navigator.pop(c);
+                  await _loadCrate(i);
+                },
+                trailing: PopupMenuButton<String>(
+                  onSelected: (v) {
+                    if (v == 'shuffle') {
+                      Navigator.pop(c);
+                      _loadCrate(i, shuffle: true);
+                    } else if (v == 'delete') {
+                      _deleteCrate(i);
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'shuffle', child: Text('Load shuffled')),
+                    PopupMenuItem(value: 'delete', child: Text('Delete crate')),
+                  ],
+                ),
+              );
+            }),
+          ),
+        ),
       ListTile(title:Text('QUEUE ${q.length} (loops)'),trailing:Row(mainAxisSize:MainAxisSize.min,children:[
         IconButton(icon:Icon(Icons.add),onPressed:()async{await _aq();if(c.mounted)Navigator.pop(c);if(mounted)_qp();}),
         IconButton(icon:Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),
