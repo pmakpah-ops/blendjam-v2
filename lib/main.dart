@@ -40,7 +40,7 @@ class S extends State<DJ> {
   Future<void> _loadCrates()async{try{final prefs=await SharedPreferences.getInstance();final raw=prefs.getString('blendjam_crates_v1');if(raw==null)return;final decoded=jsonDecode(raw);if(decoded is List){crates=decoded.whereType<Map>().map((e)=>Map<String,dynamic>.from(e)).where((e)=>e['name'] is String&&e['tracks'] is List).take(5).toList();if(mounted)setState((){});}}catch(e){debugPrint('BlendJam crates load error: $e');}}
   Future<void> _loadRecent()async{try{final prefs=await SharedPreferences.getInstance();lastFolder=prefs.getString('blendjam_last_folder_v1');final raw=prefs.getString('blendjam_recent_v1');if(raw!=null){final decoded=jsonDecode(raw);if(decoded is List){recent=decoded.whereType<Map>().map((e)=>T(e['p'] as String,e['n'] as String)).take(20).toList();}}if(mounted)setState((){});}catch(e){debugPrint('BlendJam recent load error: $e');}}
   Future<void> _rememberTracks(List<T> tracks)async{try{for(final t in tracks){recent.removeWhere((x)=>x.p==t.p);recent.insert(0,t);}if(recent.length>20)recent=recent.take(20).toList();if(tracks.isNotEmpty){lastFolder=File(tracks.first.p).parent.path;}final prefs=await SharedPreferences.getInstance();await prefs.setString('blendjam_recent_v1',jsonEncode(recent.map((t)=>{'p':t.p,'n':t.n}).toList()));if(lastFolder!=null)await prefs.setString('blendjam_last_folder_v1',lastFolder!);}catch(e){debugPrint('BlendJam recent save error: $e');}}
-  Future<void> _loadRecentQueue({bool shuffle=false})async{final tracks=<T>[];for(final t in recent){try{if(await File(t.p).exists())tracks.add(t);}catch(_){}}if(shuffle)tracks.shuffle();if(tracks.isEmpty){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No recent songs are currently available.')));return;}setState((){q=tracks;qi=0;});if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('${tracks.length}/${recent.length} recent songs available')));final playing=P(l).playing;if(playing){await _ld(O(l),tracks.first);}else{await _ld(l,tracks.first,pl:true);if(tracks.length>1)await _ld(O(l),tracks[1]);if(mounted)setState(()=>qi=tracks.length>1?1:0);}}
+  Future<void> _loadRecentQueue({bool shuffle=false})async{final tracks=<T>[];for(final t in recent){try{if(await File(t.p).exists())tracks.add(t);}catch(_){}}if(shuffle&&!au){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Shuffle is available only when Auto Mix is ON.')));return;}if(shuffle)tracks.shuffle();if(tracks.isEmpty){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No recent songs are currently available.')));return;}setState((){q=tracks;qi=0;});if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('${tracks.length}/${recent.length} recent songs available')));if(!au){await _showRecentSongs();return;}final playing=P(l).playing;if(playing){await _ld(O(l),tracks.first);}else{await _ld(l,tracks.first,pl:true);if(tracks.length>1)await _ld(O(l),tracks[1]);if(mounted)setState(()=>qi=tracks.length>1?1:0);}}
   Future<void> _saveCrates()async{try{final prefs=await SharedPreferences.getInstance();await prefs.setString('blendjam_crates_v1',jsonEncode(crates));}catch(e){debugPrint('BlendJam crates save error: $e');}}
   Future<void> _saveQueueAsCrate()async{
     if(q.isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Add songs to the queue first.')));return;}
@@ -54,6 +54,8 @@ class S extends State<DJ> {
   }
   Future<void> _loadCrate(int index,{bool shuffle=false})async{
     if(index<0||index>=crates.length)return;
+    if(shuffle&&!au){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Shuffle is available only when Auto Mix is ON.')));return;}
+    if(!au){await _showCrateSongs(index);return;}
     final raw=(crates[index]['tracks'] as List?)??[];
     final tracks=<T>[];
     for(final item in raw){if(item is Map&&item['p'] is String&&item['n'] is String){final t=T(item['p'] as String,item['n'] as String);try{if(await File(t.p).exists())tracks.add(t);}catch(_){}}}
@@ -66,6 +68,60 @@ class S extends State<DJ> {
     if(playing){await _ld(O(l),tracks.first);if(au){} }
     else{await _ld(l,tracks.first,pl:true);if(tracks.length>1)await _ld(O(l),tracks[1]);}
     if(mounted)setState((){});
+  }
+  Future<void> _loadPickedTrack(T t)async{
+    if(au){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Select a crate to load its automatic mix.')));return;}
+    final target=P(l).playing?O(l):(na==null?D.a:nb==null?D.b:O(l));
+    await _ld(target,t);
+    if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Loaded ${t.n} into Deck ${target==D.a?'A':'B'}; press Play when ready.')));
+  }
+  Future<void> _showRecentSongs()async{
+    if(!mounted)return;
+    await showDialog<void>(
+      context:context,
+      builder:(ctx)=>AlertDialog(
+        title:const Text('Recent Played — select a deck'),
+        content:SizedBox(width:double.maxFinite,height:320,child:ListView.builder(
+          itemCount:recent.length,
+          itemBuilder:(ctx,i){final t=recent[i];return ListTile(
+            dense:true,title:Text(t.n,maxLines:1,overflow:TextOverflow.ellipsis),
+            subtitle:Text(t.p,maxLines:1,overflow:TextOverflow.ellipsis),
+            onTap:(){Navigator.pop(ctx);_loadPickedTrack(t);},
+          );},
+        )),
+        actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('CLOSE'))],
+      ),
+    );
+  }
+  Future<void> _showCrateSongs(int index)async{
+    if(index<0||index>=crates.length||!mounted)return;
+    await showDialog<void>(
+      context:context,
+      builder:(ctx)=>StatefulBuilder(builder:(ctx,setDialog){
+        final tracks=(crates[index]['tracks'] as List?)??[];
+        return AlertDialog(
+          title:Text('${crates[index]['name']} — select a song'),
+          content:SizedBox(width:double.maxFinite,height:340,child:tracks.isEmpty
+            ?const Center(child:Text('This crate has no songs.'))
+            :ListView.builder(itemCount:tracks.length,itemBuilder:(ctx,i){
+              final item=tracks[i];
+              if(item is! Map||item['p'] is! String||item['n'] is! String)return const SizedBox.shrink();
+              final t=T(item['p'] as String,item['n'] as String);
+              return ListTile(
+                dense:true,title:Text(t.n,maxLines:1,overflow:TextOverflow.ellipsis),
+                subtitle:const Text('Tap to load into a deck'),
+                onTap:(){Navigator.pop(ctx);_loadPickedTrack(t);},
+                trailing:IconButton(
+                  tooltip:'Remove song from crate',icon:const Icon(Icons.remove_circle_outline),
+                  onPressed:(){setDialog((){(crates[index]['tracks'] as List).removeAt(i);});setState((){});unawaited(_saveCrates());},
+                ),
+              );
+            }),
+          ),
+          actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('DONE'))],
+        );
+      }),
+    );
   }
   Future<void> _deleteCrate(int index)async{if(index<0||index>=crates.length)return;final name=crates[index]['name'];final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Delete crate?'),content:Text('Delete "$name"? The original music files will not be deleted.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('CANCEL')),TextButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('DELETE'))]));if(ok==true&&mounted){setState(()=>crates.removeAt(index));await _saveCrates();}}
   T? _nx(){
@@ -101,7 +157,7 @@ class S extends State<DJ> {
     if(N(l)==null){
       final f=_nx();if(f!=null){final ok=await _ld(l,f,pl:true);if(!ok)return;}
     }
-    if(N(O(l))==null){
+    if(au&&N(O(l))==null){
       final f=_nx();if(f!=null)await _ld(O(l),f);
     }
   }
@@ -111,7 +167,7 @@ class S extends State<DJ> {
     if(du==null||!ap.playing)return;
     final remaining=du-p;
     final incoming=O(d);
-    if(remaining<=Duration(seconds:15)&&N(incoming)==null){
+    if(au&&remaining<=Duration(seconds:15)&&N(incoming)==null){
       final key=N(d);
       if(key!=null&&_preparedFor.add(key)){
         final next=_nx();
@@ -174,7 +230,7 @@ class S extends State<DJ> {
       if(mounted)setState((){});
 
       // Keep the next deck prepared for uninterrupted alternating playback.
-      if(N(O(l))==null){
+      if(au&&N(O(l))==null){
         final f=_nx();
         if(f!=null)await _ld(O(l),f);
       }
@@ -190,7 +246,7 @@ class S extends State<DJ> {
     final pl=P(d);
     if(pl.playing){
       await pl.pause();
-    }else if(N(d)==null){
+    }else if(N(d)==null){if(!au)return;
       final f=_nx();if(f!=null)await _ld(d,f,pl:true);
     }else if(d!=l){
       final active=P(l);
@@ -255,7 +311,7 @@ class S extends State<DJ> {
   void _qp(){
     showModalBottomSheet(context:context,builder:(c)=>SafeArea(child:Column(children:[
       Padding(padding:const EdgeInsets.fromLTRB(16,12,8,4),child:Row(children:[Expanded(child:Text('MY CRATES ${crates.length}/5',style:const TextStyle(fontWeight:FontWeight.bold))),IconButton(tooltip:'Save current queue as crate',icon:const Icon(Icons.bookmark_add),onPressed:()=>_saveQueueAsCrate()),IconButton(tooltip:'Close',icon:const Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),
-      if(recent.isNotEmpty) ListTile(dense:true,leading:const Icon(Icons.history),title:const Text('Recent 20 Songs'),subtitle:Text(lastFolder==null?'Saved locally':'Last folder: $lastFolder',maxLines:1,overflow:TextOverflow.ellipsis),onTap:(){Navigator.pop(c);_loadRecentQueue();},trailing:IconButton(tooltip:'Shuffle recent songs',icon:const Icon(Icons.shuffle),onPressed:(){Navigator.pop(c);_loadRecentQueue(shuffle:true);})),
+      if(recent.isNotEmpty) ListTile(dense:true,leading:const Icon(Icons.history),title:const Text('Recent 20 Songs'),subtitle:Text(lastFolder==null?'Saved locally':'Last folder: $lastFolder',maxLines:1,overflow:TextOverflow.ellipsis),onTap:(){Navigator.pop(c);_loadRecentQueue();},trailing:au?IconButton(tooltip:'Shuffle recent songs',icon:const Icon(Icons.shuffle),onPressed:(){Navigator.pop(c);_loadRecentQueue(shuffle:true);}):null),
       if (crates.isNotEmpty)
         SizedBox(
           height: crates.length > 2 ? 150 : null,
@@ -282,7 +338,7 @@ class S extends State<DJ> {
                       _deleteCrate(i);
                     }
                   },
-                  itemBuilder: (_) => const [
+                  itemBuilder: (_) => [
                     PopupMenuItem(value: 'shuffle', child: Text('Load shuffled')),
                     PopupMenuItem(value: 'delete', child: Text('Delete crate')),
                   ],
