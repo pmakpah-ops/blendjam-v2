@@ -339,7 +339,7 @@ class S extends State<DJ> {
                     }
                   },
                   itemBuilder: (_) => [
-                    PopupMenuItem(value: 'shuffle', child: Text('Load shuffled')),
+                    if (au) const PopupMenuItem(value: 'shuffle', child: Text('Load shuffled')),
                     PopupMenuItem(value: 'delete', child: Text('Delete crate')),
                   ],
                 ),
