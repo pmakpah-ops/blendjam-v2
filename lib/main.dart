@@ -1,4 +1,4 @@
-import 'dart:async';import 'dart:math' as m;import 'dart:typed_data';import 'package:audiotags/audiotags.dart';import 'package:file_picker/file_picker.dart';import 'package:flutter/material.dart';import 'package:just_audio/just_audio.dart';
+import 'dart:async';import 'dart:convert';import 'dart:io';import 'dart:math' as m;import 'dart:typed_data';import 'package:audiotags/audiotags.dart';import 'package:file_picker/file_picker.dart';import 'package:flutter/material.dart';import 'package:just_audio/just_audio.dart';import 'package:shared_preferences/shared_preferences.dart';
 void main()=>runApp(MaterialApp(theme:ThemeData.dark(),home:DJ()));class T{String p,n;T(this.p,this.n);}enum D{a,b}
 class DJ extends StatefulWidget {
   const DJ({super.key});
@@ -10,7 +10,7 @@ class S extends State<DJ> {
   final a=AudioPlayer(), b=AudioPlayer();
   String? na,nb; Uint8List? aa,ab;
   D l=D.a; bool au=false,xf=false,ar=false;
-  double xv=0; List<T> q=[]; int qi=0;
+  double xv=0; List<T> q=[]; int qi=0; List<Map<String,dynamic>> crates=[];
   StreamSubscription<Duration>? _posA,_posB;
   Timer? _fadeTimer;
   bool _disposed=false,_transitioning=false;
@@ -29,12 +29,42 @@ class S extends State<DJ> {
     super.initState();
     _posA=a.positionStream.listen((p)=>_ck(D.a,p));
     _posB=b.positionStream.listen((p)=>_ck(D.b,p));
+    unawaited(_loadCrates());
   }
   @override void dispose(){
     _disposed=true;_fadeTimer?.cancel();
     _posA?.cancel();_posB?.cancel();
     a.dispose();b.dispose();super.dispose();
   }
+  Future<void> _loadCrates()async{try{final prefs=await SharedPreferences.getInstance();final raw=prefs.getString('blendjam_crates_v1');if(raw==null)return;final decoded=jsonDecode(raw);if(decoded is List){crates=decoded.whereType<Map>().map((e)=>Map<String,dynamic>.from(e)).where((e)=>e['name'] is String&&e['tracks'] is List).take(5).toList();if(mounted)setState((){});}}catch(e){debugPrint('BlendJam crates load error: $e');}}
+  Future<void> _saveCrates()async{try{final prefs=await SharedPreferences.getInstance();await prefs.setString('blendjam_crates_v1',jsonEncode(crates));}catch(e){debugPrint('BlendJam crates save error: $e');}}
+  Future<void> _saveQueueAsCrate()async{
+    if(q.isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Add songs to the queue first.')));return;}
+    if(crates.length>=5){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('You can save up to 5 crates. Delete a crate to make room.')));return;}
+    final nameCtrl=TextEditingController();
+    final name=await showDialog<String>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Save Mix as Crate'),content:TextField(controller:nameCtrl,autofocus:true,maxLength:30,decoration:const InputDecoration(hintText:'Enter crate name')),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('CANCEL')),TextButton(onPressed:()=>Navigator.pop(ctx,nameCtrl.text.trim()),child:const Text('SAVE'))]));
+    final chosen=nameCtrl.text.trim();nameCtrl.dispose();if(name==null||chosen.isEmpty||!mounted)return;
+    final tracks=q.take(20).map((t)=>{'p':t.p,'n':t.n}).toList();
+    if(q.length>20)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Only the first 20 queued songs were saved.')));
+    setState(()=>crates.add({'name':chosen,'tracks':tracks}));await _saveCrates();
+  }
+  Future<void> _loadCrate(int index,{bool shuffle=false})async{
+    if(index<0||index>=crates.length)return;
+    final raw=(crates[index]['tracks'] as List?)??[];
+    final tracks=<T>[];
+    for(final item in raw){if(item is Map&&item['p'] is String&&item['n'] is String){final t=T(item['p'] as String,item['n'] as String);try{if(await File(t.p).exists())tracks.add(t);}catch(_){}}}
+    if(tracks.isEmpty){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No saved songs are currently available in this crate.')));return;}
+    if(shuffle)tracks.shuffle();
+    if(!mounted)return;
+    setState((){q=tracks;qi=0;});
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('${tracks.length}/${raw.length} songs available')));
+    if(au){await _as();}else{
+      final d=P(l).playing?O(l):l;
+      await _ld(d,tracks.first,pl:!P(l).playing);
+      if(tracks.length>1&&mounted)setState(()=>qi=1);
+    }
+  }
+  Future<void> _deleteCrate(int index)async{if(index<0||index>=crates.length)return;final name=crates[index]['name'];final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Delete crate?'),content:Text('Delete "$name"? The original music files will not be deleted.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('CANCEL')),TextButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('DELETE'))]));if(ok==true&&mounted){setState(()=>crates.removeAt(index));await _saveCrates();}}
   T? _nx(){
     if(q.isEmpty)return null;
     final t=q[qi%q.length];qi=(qi+1)%q.length;return t;
@@ -221,6 +251,8 @@ class S extends State<DJ> {
   }
   void _qp(){
     showModalBottomSheet(context:context,builder:(c)=>SafeArea(child:Column(children:[
+      Padding(padding:const EdgeInsets.fromLTRB(16,12,8,4),child:Row(children:[Expanded(child:Text('MY CRATES ${crates.length}/5',style:const TextStyle(fontWeight:FontWeight.bold))),IconButton(tooltip:'Save current queue as crate',icon:const Icon(Icons.bookmark_add),onPressed:()=>_saveQueueAsCrate()),IconButton(tooltip:'Close',icon:const Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),
+      if(crates.isNotEmpty) SizedBox(height:crates.length>2?150:null,child:ListView(shrinkWrap:crates.length<=2,children:List.generate(crates.length,(i){final cr=crates[i];final count=((cr['tracks'] as List?)??[]).length;return ListTile(dense:true,leading:const Icon(Icons.library_music),title:Text('${cr['name']}',overflow:TextOverflow.ellipsis),subtitle:Text('$count/20 saved songs'),onTap:()async{Navigator.pop(c);await _loadCrate(i);},trailing:PopupMenuButton<String>(onSelected:(v){if(v=='shuffle'){Navigator.pop(c);_loadCrate(i,shuffle:true);}else if(v=='delete'){_deleteCrate(i);}},itemBuilder:(_)=>const [PopupMenuItem(value:'shuffle',child:Text('Load shuffled')),PopupMenuItem(value:'delete',child:Text('Delete crate'))]))}))),
       ListTile(title:Text('QUEUE ${q.length} (loops)'),trailing:Row(mainAxisSize:MainAxisSize.min,children:[
         IconButton(icon:Icon(Icons.add),onPressed:()async{await _aq();if(c.mounted)Navigator.pop(c);if(mounted)_qp();}),
         IconButton(icon:Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),
@@ -234,7 +266,7 @@ Widget _dk(D d,bool up)=>Deck(deck:d,pl:P(d),name:N(d)??'No track',art:A(d),live
 actions:[Text('AUTO',style:TextStyle(fontSize:11)),Switch(value:au,activeColor:C,onChanged:(v)async{setState(()=>au=v);if(v)await _as();}),PopupMenuButton(icon:Icon(Icons.upload_file),itemBuilder:(_)=>[PopupMenuItem(child:Text('Load A'),onTap:()=>_pk(D.a)),PopupMenuItem(child:Text('Load B'),onTap:()=>_pk(D.b)),PopupMenuItem(child:Text('Add Queue'),onTap:()=>_aq())]),IconButton(icon:Icon(Icons.queue_music),onPressed:_qp)]),
 body:SafeArea(child:Column(children:[Flexible(child:_dk(D.a,false)),Padding(padding:EdgeInsets.symmetric(horizontal:12,vertical:2),child:Column(children:[Row(children:[Text('A',style:TextStyle(fontSize:12)),Expanded(child:Slider(value:xv,min:0,max:1,activeColor:C,onChanged:(v)=>unawaited(_manualCrossfade(v)))),Text('B',style:TextStyle(fontSize:12))]),Text(xf?'MIXING ${(xv*100).toInt()}%':'',style:TextStyle(color:C,fontSize:11))])),Flexible(child:_dk(D.b,true))])));}
 class Deck extends StatefulWidget{final D deck;final AudioPlayer pl;final String name;final Uint8List?art;final bool live,next,lift;final VoidCallback onPlay,onPick;final Future<void> Function(int)onSeek;const Deck({super.key,required this.deck,required this.pl,required this.name,required this.art,required this.live,required this.next,required this.onPlay,required this.onPick,required this.onSeek,required this.lift});@override State<Deck>createState()=>DD();}
-class DD extends State<Deck> with TickerProviderStateMixin{late AnimationController an,rg,titleScroll;StreamSubscription<bool>?ps;@override void initState(){super.initState();an=AnimationController(vsync:this,duration:Duration(seconds:3));rg=AnimationController(vsync:this,duration:Duration(seconds:5));titleScroll=AnimationController(vsync:this,duration:Duration(seconds:8));ps=widget.pl.playingStream.listen((p){if(!mounted)return;if(p){an.repeat();rg.repeat();titleScroll.repeat();}else{an.stop();rg.stop();titleScroll.stop();}});if(widget.pl.playing){an.repeat();rg.repeat();titleScroll.repeat();}}@override void didUpdateWidget(covariant Deck oldWidget){super.didUpdateWidget(oldWidget);if(oldWidget.name!=widget.name){titleScroll.value=0;if(widget.pl.playing)titleScroll.repeat();else titleScroll.stop();}} @override void dispose(){ps?.cancel();an.dispose();rg.dispose();titleScroll.dispose();super.dispose();}
+class DD extends State<Deck> with TickerProviderStateMixin{late AnimationController an,rg,titleScroll;StreamSubscription<bool>?ps;@override void initState(){super.initState();an=AnimationController(vsync:this,duration:Duration(seconds:3));rg=AnimationController(vsync:this,duration:Duration(seconds:5));titleScroll=AnimationController(vsync:this,duration:Duration(seconds:10));ps=widget.pl.playingStream.listen((p){if(!mounted)return;if(p){an.repeat();rg.repeat();titleScroll.repeat();}else{an.stop();rg.stop();titleScroll.stop();}});if(widget.pl.playing){an.repeat();rg.repeat();titleScroll.repeat();}}@override void didUpdateWidget(covariant Deck oldWidget){super.didUpdateWidget(oldWidget);if(oldWidget.name!=widget.name){titleScroll.value=0;if(widget.pl.playing)titleScroll.repeat();else titleScroll.stop();}} @override void dispose(){ps?.cancel();an.dispose();rg.dispose();titleScroll.dispose();super.dispose();}
 String _f(Duration d)=>'${d.inMinutes.remainder(60).toString().padLeft(2,'0')}:${(d.inSeconds%60).toString().padLeft(2,'0')}';
 Widget _da(){Widget im;if(widget.art!=null&&widget.art!.isNotEmpty)im=Image.memory(widget.art!,width:130,height:130,fit:BoxFit.cover);else im=Image.asset('assets/images/default_cover.png',width:130,height:130,fit:BoxFit.cover,errorBuilder:(c,e,s)=>Icon(Icons.music_note,size:60));
 return Container(width:135,height:135,decoration:BoxDecoration(shape:BoxShape.circle,color:Colors.black,border:Border.all(color:widget.live?Colors.white24:Colors.white10)),child:ClipOval(child:Stack(fit:StackFit.expand,children:[im,CustomPaint(painter:Gr()),Center(child:Container(width:50,height:50,decoration:BoxDecoration(shape:BoxShape.circle,color:Color(0xFF101010)),child:Container(margin:EdgeInsets.all(2),decoration:BoxDecoration(shape:BoxShape.circle,border:Border.all(color:widget.live?Color(0xFFCEBBFF):Colors.white24)))))]))); }
