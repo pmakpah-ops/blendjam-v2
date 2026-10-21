@@ -65,7 +65,7 @@ class S extends State<DJ> {
     if(name==null||chosen.isEmpty||!mounted)return;
     setState(()=>crates.add({'name':chosen,'tracks':[{'p':track.p,'n':track.n}]}));
     await _saveCrates();
-    if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Created "\${chosen}" with \${track.n}.')));
+    if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Created "${chosen}" with ${track.n}.')));
   }
   Future<void> _addTrackToCrate(int index,T track)async{
     if(index<0||index>=crates.length||!mounted)return;
@@ -76,7 +76,7 @@ class S extends State<DJ> {
     if(list.length>=20){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('This crate is full (20 songs).')));return;}
     setState(()=>list.add({'p':track.p,'n':track.n}));
     await _saveCrates();
-    if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Added \${track.n} to "\${crates[index]['name']}".')));
+    if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Added ${track.n} to "${crates[index]['name']}".')));
   }
   Future<void> _addSongsToCrate(int index,StateSetter setDialog)async{
     if(index<0||index>=crates.length||!mounted)return;
@@ -97,7 +97,7 @@ class S extends State<DJ> {
     if(!mounted)return;
     final message=added==0
       ?(duplicates>0?'All selected songs are already in this crate.':'No songs were added.')
-      :'Added $added song\${added==1?'':'s'} to "\${crates[index]['name']}"\${duplicates>0?' (\$duplicates duplicates skipped)':''}.';
+      :'Added $added song${added==1?'':'s'} to "${crates[index]['name']}"${duplicates>0?' ($duplicates duplicates skipped)':''}.';
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(message)));
   }
   Future<void> _showQueueTrackActions(T track)async{
@@ -113,7 +113,7 @@ class S extends State<DJ> {
         if(crates.isEmpty)const Padding(padding:EdgeInsets.all(12),child:Text('No crates yet. Create one for this song.')),
         ...List.generate(crates.length,(i){
           final count=((crates[i]['tracks'] as List?)??[]).length;
-          return ListTile(dense:true,leading:const Icon(Icons.library_music),title:Text('\${crates[i]['name']}',maxLines:1,overflow:TextOverflow.ellipsis),subtitle:Text('$count/20 songs'),onTap:()=>Navigator.pop(ctx,i));
+          return ListTile(dense:true,leading:const Icon(Icons.library_music),title:Text('${crates[i]['name']}',maxLines:1,overflow:TextOverflow.ellipsis),subtitle:Text('$count/20 songs'),onTap:()=>Navigator.pop(ctx,i));
         }),
         ListTile(dense:true,leading:const Icon(Icons.create_new_folder),title:const Text('Create New Crate'),enabled:crates.length<5,onTap:()=>Navigator.pop(ctx,-1)),
       ])),
