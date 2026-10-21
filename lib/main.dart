@@ -52,6 +52,77 @@ class S extends State<DJ> {
     if(q.length>20)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Only the first 20 queued songs were saved.')));
     setState(()=>crates.add({'name':chosen,'tracks':tracks}));await _saveCrates();
   }
+  Future<void> _createCrateWithTrack(T track)async{
+    if(!mounted)return;
+    if(crates.length>=5){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('You can save up to 5 crates. Delete a crate to make room.')));return;}
+    final nameCtrl=TextEditingController();
+    final name=await showDialog<String>(context:context,builder:(ctx)=>AlertDialog(
+      title:const Text('Create New Crate'),
+      content:TextField(controller:nameCtrl,autofocus:true,maxLength:30,decoration:const InputDecoration(hintText:'Enter crate name')),
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('CANCEL')),TextButton(onPressed:()=>Navigator.pop(ctx,nameCtrl.text.trim()),child:const Text('CREATE'))],
+    ));
+    final chosen=nameCtrl.text.trim();nameCtrl.dispose();
+    if(name==null||chosen.isEmpty||!mounted)return;
+    setState(()=>crates.add({'name':chosen,'tracks':[{'p':track.p,'n':track.n}]}));
+    await _saveCrates();
+    if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Created "\${chosen}" with \${track.n}.')));
+  }
+  Future<void> _addTrackToCrate(int index,T track)async{
+    if(index<0||index>=crates.length||!mounted)return;
+    final list=(crates[index]['tracks'] as List?)??<dynamic>[];
+    if(list.any((item)=>item is Map&&item['p']==track.p)){
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('That song is already in this crate.')));return;
+    }
+    if(list.length>=20){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('This crate is full (20 songs).')));return;}
+    setState(()=>list.add({'p':track.p,'n':track.n}));
+    await _saveCrates();
+    if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Added \${track.n} to "\${crates[index]['name']}".')));
+  }
+  Future<void> _addSongsToCrate(int index,StateSetter setDialog)async{
+    if(index<0||index>=crates.length||!mounted)return;
+    final current=(crates[index]['tracks'] as List?)??<dynamic>[];
+    if(current.length>=20){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('This crate is full (20 songs).')));return;}
+    final picked=await FilePicker.platform.pickFiles(type:FileType.audio,allowMultiple:true);
+    if(picked==null||_disposed||!mounted||index>=crates.length)return;
+    final list=(crates[index]['tracks'] as List?)??<dynamic>[];
+    final paths=<String>{for(final item in list) if(item is Map&&item['p'] is String) item['p'] as String};
+    var duplicates=0,added=0;
+    for(final file in picked.files){
+      final path=file.path;if(path==null)continue;
+      if(paths.contains(path)){duplicates++;continue;}
+      if(list.length>=20)break;
+      paths.add(path);list.add({'p':path,'n':file.name});added++;
+    }
+    setState((){});setDialog((){});await _saveCrates();
+    if(!mounted)return;
+    final message=added==0
+      ?(duplicates>0?'All selected songs are already in this crate.':'No songs were added.')
+      :'Added $added song\${added==1?'':'s'} to "\${crates[index]['name']}"\${duplicates>0?' (\$duplicates duplicates skipped)':''}.';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(message)));
+  }
+  Future<void> _showQueueTrackActions(T track)async{
+    if(!mounted)return;
+    final action=await showDialog<String>(context:context,builder:(ctx)=>AlertDialog(
+      title:const Text('Add to Crate'),content:Text(track.n,maxLines:2,overflow:TextOverflow.ellipsis),
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx,'cancel'),child:const Text('CANCEL')),TextButton(onPressed:()=>Navigator.pop(ctx,'add'),child:const Text('ADD TO CRATE'))],
+    ));
+    if(action!='add'||!mounted)return;
+    final choice=await showDialog<int>(context:context,builder:(ctx)=>AlertDialog(
+      title:const Text('Choose a crate'),
+      content:SizedBox(width:double.maxFinite,child:Column(mainAxisSize:MainAxisSize.min,children:[
+        if(crates.isEmpty)const Padding(padding:EdgeInsets.all(12),child:Text('No crates yet. Create one for this song.')),
+        ...List.generate(crates.length,(i){
+          final count=((crates[i]['tracks'] as List?)??[]).length;
+          return ListTile(dense:true,leading:const Icon(Icons.library_music),title:Text('\${crates[i]['name']}',maxLines:1,overflow:TextOverflow.ellipsis),subtitle:Text('$count/20 songs'),onTap:()=>Navigator.pop(ctx,i));
+        }),
+        ListTile(dense:true,leading:const Icon(Icons.create_new_folder),title:const Text('Create New Crate'),enabled:crates.length<5,onTap:()=>Navigator.pop(ctx,-1)),
+      ])),
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx,-2),child:const Text('CANCEL'))],
+    ));
+    if(choice==null||choice==-2||!mounted)return;
+    if(choice==-1){await _createCrateWithTrack(track);}
+    else if(choice>=0&&choice<crates.length){await _addTrackToCrate(choice,track);}
+  }
   Future<void> _loadCrate(int index,{bool shuffle=false})async{
     if(index<0||index>=crates.length)return;
     if(shuffle&&!au){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Shuffle is available only when Auto Mix is ON.')));return;}
@@ -100,7 +171,7 @@ class S extends State<DJ> {
       builder:(ctx)=>StatefulBuilder(builder:(ctx,setDialog){
         final tracks=(crates[index]['tracks'] as List?)??[];
         return AlertDialog(
-          title:Text('${crates[index]['name']} — select a song'),
+          title:Text('${crates[index]['name']} — ${tracks.length}/20 songs'),
           content:SizedBox(width:double.maxFinite,height:340,child:tracks.isEmpty
             ?const Center(child:Text('This crate has no songs.'))
             :ListView.builder(itemCount:tracks.length,itemBuilder:(ctx,i){
@@ -118,7 +189,7 @@ class S extends State<DJ> {
               );
             }),
           ),
-          actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('DONE'))],
+          actions:[TextButton(onPressed:()=>_addSongsToCrate(index,setDialog),child:const Text('ADD SONGS')),TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('DONE'))],
         );
       }),
     );
@@ -352,7 +423,7 @@ class S extends State<DJ> {
         IconButton(icon:Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),
       Expanded(child:ListView.builder(itemCount:q.length,itemBuilder:(x,i)=>ListTile(dense:true,title:Text(q[i].n,overflow:TextOverflow.ellipsis,style:TextStyle(color:N(l)==q[i].n?C:Colors.white)),onTap:()async{
         Navigator.pop(c);final d=P(l).playing?O(l):l;await _ld(d,q[i],pl:!P(l).playing);
-      })))
+      },onLongPress:()=>_showQueueTrackActions(q[i])))))
     ])));
   }
 Widget _dk(D d,bool up)=>Deck(deck:d,pl:P(d),name:N(d)??'No track',art:A(d),live:l==d,next:N(d)!=null&&l!=d,onPlay:()=>_tg(d),onPick:()=>_pk(d),onSeek:(s)async=>await P(d).seek(P(d).position+Duration(seconds:s)),lift:up);
