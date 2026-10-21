@@ -423,7 +423,7 @@ class S extends State<DJ> {
         IconButton(icon:Icon(Icons.close),onPressed:()=>Navigator.pop(c))])),
       Expanded(child:ListView.builder(itemCount:q.length,itemBuilder:(x,i)=>ListTile(dense:true,title:Text(q[i].n,overflow:TextOverflow.ellipsis,style:TextStyle(color:N(l)==q[i].n?C:Colors.white)),onTap:()async{
         Navigator.pop(c);final d=P(l).playing?O(l):l;await _ld(d,q[i],pl:!P(l).playing);
-      },onLongPress:()=>_showQueueTrackActions(q[i])))))
+      },onLongPress:()=>_showQueueTrackActions(q[i]))))
     ])));
   }
 Widget _dk(D d,bool up)=>Deck(deck:d,pl:P(d),name:N(d)??'No track',art:A(d),live:l==d,next:N(d)!=null&&l!=d,onPlay:()=>_tg(d),onPick:()=>_pk(d),onSeek:(s)async=>await P(d).seek(P(d).position+Duration(seconds:s)),lift:up);
