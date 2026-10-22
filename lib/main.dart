@@ -35,8 +35,9 @@ class S extends State<DJ> {
       _bpmInit ??= MusicFeatureAnalyzer.initialize().then((ok){if(!ok)throw StateError('BPM analyzer initialization failed');});
       await _bpmInit;
       if(_disposed||token!=_gen(d))return;
-      final song=await MusicFeatureAnalyzer.metadata(t.p);
-      if(song==null||song.duration<=0)return;
+      final durationMs=P(d).duration?.inMilliseconds??0;
+      if(durationMs<=0)return;
+      final song=SongModel(id:t.p,title:t.n,artist:'Unknown',album:'Unknown',duration:durationMs,filePath:t.p);
       final features=await MusicFeatureAnalyzer.analyzeSong(song);
       final value=features?.tempoBpm;
       if(value!=null&&value.isFinite&&value>=40&&value<=240){
