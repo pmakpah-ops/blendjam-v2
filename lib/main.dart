@@ -1,4 +1,4 @@
-import 'dart:async';import 'dart:convert';import 'dart:io';import 'dart:math' as m;import 'dart:typed_data';import 'package:audiotags/audiotags.dart';import 'package:file_picker/file_picker.dart';import 'package:flutter/material.dart';import 'package:just_audio/just_audio.dart';import 'package:shared_preferences/shared_preferences.dart';import 'package:music_feature_analyzer/music_feature_analyzer.dart';
+import 'dart:async';import 'dart:convert';import 'dart:io';import 'dart:math' as m;import 'dart:typed_data';import 'package:audiotags/audiotags.dart';import 'package:file_picker/file_picker.dart';import 'package:flutter/material.dart';import 'package:just_audio/just_audio.dart';import 'package:shared_preferences/shared_preferences.dart';
 void main()=>runApp(MaterialApp(theme:ThemeData.dark(),home:DJ()));class T{String p,n;T(this.p,this.n);}enum D{a,b}
 class DJ extends StatefulWidget {
   const DJ({super.key});
@@ -8,7 +8,7 @@ class S extends State<DJ> {
   static const C=Color(0xFFCEBBFF);
   static const _fadeLength=Duration(seconds:10);
   final a=AudioPlayer(), b=AudioPlayer();
-  String? na,nb; Uint8List? aa,ab; double? bpmA,bpmB; bool bpmBusyA=false,bpmBusyB=false; Future<void>? _bpmInit; final Map<String,double> _bpmCache={};
+  String? na,nb; Uint8List? aa,ab;
   D l=D.a; bool au=false,xf=false,ar=false;
   double xv=0; List<T> q=[]; int qi=0; List<Map<String,dynamic>> crates=[]; List<T> recent=[]; String? lastFolder;
   StreamSubscription<Duration>? _posA,_posB;
@@ -23,30 +23,6 @@ class S extends State<DJ> {
   Uint8List? A(D d)=>d==D.a?aa:ab;
   void SN(D d,String? v){if(d==D.a)na=v;else nb=v;}
   void SA(D d,Uint8List? v){if(d==D.a)aa=v;else ab=v;}
-  double? BPM(D d)=>d==D.a?bpmA:bpmB;
-  bool BPMBusy(D d)=>d==D.a?bpmBusyA:bpmBusyB;
-  void SBPM(D d,double? v){if(d==D.a)bpmA=v;else bpmB=v;}
-  void SBBusy(D d,bool v){if(d==D.a)bpmBusyA=v;else bpmBusyB=v;}
-  Future<void> _analyseBpm(D d,T t,int token) async {
-    final cached=_bpmCache[t.p];
-    if(cached!=null){if(!_disposed&&token==_gen(d)){SBPM(d,cached);if(mounted)setState((){});}return;}
-    if(mounted)setState(()=>SBBusy(d,true));
-    try {
-      _bpmInit ??= MusicFeatureAnalyzer.initialize().then((ok){if(!ok)throw StateError('BPM analyzer initialization failed');});
-      await _bpmInit;
-      if(_disposed||token!=_gen(d))return;
-      final durationMs=P(d).duration?.inMilliseconds??0;
-      if(durationMs<=0)return;
-      final song=SongModel(id:t.p,title:t.n,artist:'Unknown',album:'Unknown',duration:durationMs,filePath:t.p);
-      final features=await MusicFeatureAnalyzer.analyzeSong(song);
-      final value=features?.tempoBpm;
-      if(value!=null&&value.isFinite&&value>=40&&value<=240){
-        _bpmCache[t.p]=value;
-        if(!_disposed&&token==_gen(d)){SBPM(d,value);if(mounted)setState((){});}
-      }
-    } catch(e){debugPrint('BlendJam BPM analysis error: $e');}
-    finally {if(!_disposed&&token==_gen(d)){SBBusy(d,false);if(mounted)setState((){});}}
-  }
   int _gen(D d)=>d==D.a?_generationA:_generationB;
   void _bump(D d){if(d==D.a)_generationA++;else _generationB++;}
   @override void initState(){
@@ -236,11 +212,10 @@ class S extends State<DJ> {
       if(token!=_gen(d)||_disposed)return false;
       await ap.seek(const Duration(milliseconds:200));
       await ap.setSpeed(1);
-      SN(d,t.n);SA(d,null);SBPM(d,null);SBBusy(d,false);
+      SN(d,t.n);SA(d,null);
       if(pl){l=d;xv=d==D.a?0:1;await ap.setVolume(1);unawaited(ap.play().catchError((Object e){debugPrint('BlendJam deck playback error: $e');}));}
       if(mounted)setState((){});
       _rt(t.p).then((bytes){if(!_disposed&&token==_gen(d)){SA(d,bytes);if(mounted)setState((){});}});
-      unawaited(_analyseBpm(d,t,token));
       return true;
     }catch(_){
       if(token==_gen(d)){SN(d,null);SA(d,null);try{await ap.stop();}catch(_){}}
@@ -451,15 +426,15 @@ class S extends State<DJ> {
       },onLongPress:()=>_showQueueTrackActions(q[i]))))
     ])));
   }
-Widget _dk(D d,bool up)=>Deck(deck:d,pl:P(d),name:N(d)??'No track',art:A(d),live:l==d,next:N(d)!=null&&l!=d,bpm:BPM(d),bpmLoading:BPMBusy(d),onPlay:()=>_tg(d),onPick:()=>_pk(d),onSeek:(s)async=>await P(d).seek(P(d).position+Duration(seconds:s)),lift:up);
+Widget _dk(D d,bool up)=>Deck(deck:d,pl:P(d),name:N(d)??'No track',art:A(d),live:l==d,next:N(d)!=null&&l!=d,onPlay:()=>_tg(d),onPick:()=>_pk(d),onSeek:(s)async=>await P(d).seek(P(d).position+Duration(seconds:s)),lift:up);
 @override Widget build(BuildContext c)=>Scaffold(backgroundColor:Colors.black,appBar:AppBar(backgroundColor:Colors.black,title:Text('BlendJam'),
 actions:[Text('AUTO',style:TextStyle(fontSize:11)),Switch(value:au,activeColor:C,onChanged:(v)async{setState(()=>au=v);if(v)await _as();}),PopupMenuButton(icon:Icon(Icons.upload_file),itemBuilder:(_)=>[PopupMenuItem(child:Text('Load A'),onTap:()=>_pk(D.a)),PopupMenuItem(child:Text('Load B'),onTap:()=>_pk(D.b)),PopupMenuItem(child:Text('Add Queue'),onTap:()=>_aq())]),IconButton(icon:Icon(Icons.queue_music),onPressed:_qp)]),
 body:SafeArea(child:Column(children:[Flexible(child:_dk(D.a,false)),Padding(padding:EdgeInsets.symmetric(horizontal:12,vertical:2),child:Column(children:[Row(children:[Text('A',style:TextStyle(fontSize:12)),Expanded(child:Slider(value:xv,min:0,max:1,activeColor:C,onChanged:(v)=>unawaited(_manualCrossfade(v)))),Text('B',style:TextStyle(fontSize:12))]),Text(xf?'MIXING ${(xv*100).toInt()}%':'',style:TextStyle(color:C,fontSize:11))])),Flexible(child:_dk(D.b,true))])));}
-class Deck extends StatefulWidget{final D deck;final AudioPlayer pl;final String name;final Uint8List?art;final bool live,next,lift;final double? bpm;final bool bpmLoading;final VoidCallback onPlay,onPick;final Future<void> Function(int)onSeek;const Deck({super.key,required this.deck,required this.pl,required this.name,required this.art,required this.live,required this.next,required this.bpm,required this.bpmLoading,required this.onPlay,required this.onPick,required this.onSeek,required this.lift});@override State<Deck>createState()=>DD();}
+class Deck extends StatefulWidget{final D deck;final AudioPlayer pl;final String name;final Uint8List?art;final bool live,next,lift;final VoidCallback onPlay,onPick;final Future<void> Function(int)onSeek;const Deck({super.key,required this.deck,required this.pl,required this.name,required this.art,required this.live,required this.next,required this.onPlay,required this.onPick,required this.onSeek,required this.lift});@override State<Deck>createState()=>DD();}
 class DD extends State<Deck> with TickerProviderStateMixin{late AnimationController an,rg,titleScroll;StreamSubscription<bool>?ps;@override void initState(){super.initState();an=AnimationController(vsync:this,duration:Duration(seconds:3));rg=AnimationController(vsync:this,duration:Duration(seconds:5));titleScroll=AnimationController(vsync:this,duration:Duration(seconds:10));ps=widget.pl.playingStream.listen((p){if(!mounted)return;if(p){an.repeat();rg.repeat();titleScroll.repeat();}else{an.stop();rg.stop();titleScroll.stop();}});if(widget.pl.playing){an.repeat();rg.repeat();titleScroll.repeat();}}@override void didUpdateWidget(covariant Deck oldWidget){super.didUpdateWidget(oldWidget);if(oldWidget.name!=widget.name){titleScroll.value=0;if(widget.pl.playing)titleScroll.repeat();else titleScroll.stop();}} @override void dispose(){ps?.cancel();an.dispose();rg.dispose();titleScroll.dispose();super.dispose();}
 String _f(Duration d)=>'${d.inMinutes.remainder(60).toString().padLeft(2,'0')}:${(d.inSeconds%60).toString().padLeft(2,'0')}';
 Widget _da(){Widget im;if(widget.art!=null&&widget.art!.isNotEmpty)im=Image.memory(widget.art!,width:130,height:130,fit:BoxFit.cover);else im=Image.asset('assets/images/default_cover.png',width:130,height:130,fit:BoxFit.cover,errorBuilder:(c,e,s)=>Icon(Icons.music_note,size:60));
 return Container(width:135,height:135,decoration:BoxDecoration(shape:BoxShape.circle,color:Colors.black,border:Border.all(color:widget.live?Colors.white24:Colors.white10)),child:ClipOval(child:Stack(fit:StackFit.expand,children:[im,CustomPaint(painter:Gr()),Center(child:Container(width:50,height:50,decoration:BoxDecoration(shape:BoxShape.circle,color:Color(0xFF101010)),child:Container(margin:EdgeInsets.all(2),decoration:BoxDecoration(shape:BoxShape.circle,border:Border.all(color:widget.live?Color(0xFFCEBBFF):Colors.white24)))))]))); }
-@override Widget build(BuildContext c)=>Column(mainAxisAlignment:widget.lift?MainAxisAlignment.start:MainAxisAlignment.center,children:[Text('DECK ${widget.deck==D.a?'A':'B'} ${widget.live?'(LIVE)':widget.next?'(NEXT)':''}',style:TextStyle(fontSize:11,color:widget.live?Color(0xFFCEBBFF):Colors.white70)),SizedBox(width:165,height:165,child:Stack(alignment:Alignment.center,children:[RotationTransition(turns:rg,child:CustomPaint(size:Size(165,165),painter:RL(live:widget.live,has:widget.name!='No track',play:widget.pl.playing))),RotationTransition(turns:an,child:_da()),StreamBuilder<bool>(stream:widget.pl.playingStream,initialData:widget.pl.playing,builder:(x,s){bool pl=s.data??false;return InkWell(customBorder:CircleBorder(),onTap:widget.onPlay,child:Container(width:48,height:48,decoration:BoxDecoration(shape:BoxShape.circle,color:Color(0xFFCEBBFF)),child:Icon(pl?Icons.pause:Icons.play_arrow,color:Colors.black)));})])),LayoutBuilder(builder:(ctx,limits){final barWidth=limits.maxWidth*0.5;final style=TextStyle(fontSize:11,color:Colors.white);final painter=TextPainter(text:TextSpan(text:widget.name,style:style),textDirection:TextDirection.ltr,maxLines:1)..layout();final textWidth=painter.width;return Container(width:barWidth,height:20,alignment:Alignment.center,clipBehavior:Clip.hardEdge,decoration:BoxDecoration(color:Color(0xFF171717),borderRadius:BorderRadius.circular(4)),child:textWidth<=barWidth?Center(child:Text(widget.name,style:style,maxLines:1,softWrap:false)):AnimatedBuilder(animation:titleScroll,builder:(ctx,child)=>Transform.translate(offset:Offset((-textWidth+(barWidth+textWidth)*titleScroll.value).toDouble(),0),child:child),child:SizedBox(width:textWidth,child:Text(widget.name,style:style,maxLines:1,softWrap:false))));}),Padding(padding:EdgeInsets.only(top:1),child:Text(widget.bpm!=null?'BPM ${widget.bpm!.round()}':widget.bpmLoading?'BPM analysing…':'BPM —',style:TextStyle(fontSize:10,color:widget.bpm!=null?Color(0xFFCEBBFF):Colors.white38))),StreamBuilder<Duration>(stream:widget.pl.positionStream,builder:(x,s){var po=s.data??Duration.zero;var du=widget.pl.duration??Duration(seconds:1);var pr=(po.inMilliseconds/du.inMilliseconds).clamp(0.0,1.0);return Column(children:[SizedBox(height:18,child:Slider(value:pr,min:0,max:1,activeColor:widget.live?Color(0xFFCEBBFF):Colors.white38,onChanged:(v)async=>await widget.pl.seek(Duration(milliseconds:(v*du.inMilliseconds).round())))),Text('${_f(po)} / ${_f(du)}',style:TextStyle(fontSize:10,color:Colors.white38)),Row(mainAxisAlignment:MainAxisAlignment.center,children:[IconButton(icon:Icon(Icons.replay_10),visualDensity:VisualDensity.compact,onPressed:()=>widget.onSeek(-10)),IconButton(icon:Icon(Icons.folder_open),visualDensity:VisualDensity.compact,onPressed:widget.onPick),IconButton(icon:Icon(Icons.forward_10),visualDensity:VisualDensity.compact,onPressed:()=>widget.onSeek(10))])]);})]);}
+@override Widget build(BuildContext c)=>Column(mainAxisAlignment:widget.lift?MainAxisAlignment.start:MainAxisAlignment.center,children:[Text('DECK ${widget.deck==D.a?'A':'B'} ${widget.live?'(LIVE)':widget.next?'(NEXT)':''}',style:TextStyle(fontSize:11,color:widget.live?Color(0xFFCEBBFF):Colors.white70)),SizedBox(width:165,height:165,child:Stack(alignment:Alignment.center,children:[RotationTransition(turns:rg,child:CustomPaint(size:Size(165,165),painter:RL(live:widget.live,has:widget.name!='No track',play:widget.pl.playing))),RotationTransition(turns:an,child:_da()),StreamBuilder<bool>(stream:widget.pl.playingStream,initialData:widget.pl.playing,builder:(x,s){bool pl=s.data??false;return InkWell(customBorder:CircleBorder(),onTap:widget.onPlay,child:Container(width:48,height:48,decoration:BoxDecoration(shape:BoxShape.circle,color:Color(0xFFCEBBFF)),child:Icon(pl?Icons.pause:Icons.play_arrow,color:Colors.black)));})])),LayoutBuilder(builder:(ctx,limits){final barWidth=limits.maxWidth*0.5;final style=TextStyle(fontSize:11,color:Colors.white);final painter=TextPainter(text:TextSpan(text:widget.name,style:style),textDirection:TextDirection.ltr,maxLines:1)..layout();final textWidth=painter.width;return Container(width:barWidth,height:20,alignment:Alignment.center,clipBehavior:Clip.hardEdge,decoration:BoxDecoration(color:Color(0xFF171717),borderRadius:BorderRadius.circular(4)),child:textWidth<=barWidth?Center(child:Text(widget.name,style:style,maxLines:1,softWrap:false)):AnimatedBuilder(animation:titleScroll,builder:(ctx,child)=>Transform.translate(offset:Offset((-textWidth+(barWidth+textWidth)*titleScroll.value).toDouble(),0),child:child),child:SizedBox(width:textWidth,child:Text(widget.name,style:style,maxLines:1,softWrap:false))));}),StreamBuilder<Duration>(stream:widget.pl.positionStream,builder:(x,s){var po=s.data??Duration.zero;var du=widget.pl.duration??Duration(seconds:1);var pr=(po.inMilliseconds/du.inMilliseconds).clamp(0.0,1.0);return Column(children:[SizedBox(height:18,child:Slider(value:pr,min:0,max:1,activeColor:widget.live?Color(0xFFCEBBFF):Colors.white38,onChanged:(v)async=>await widget.pl.seek(Duration(milliseconds:(v*du.inMilliseconds).round())))),Text('${_f(po)} / ${_f(du)}',style:TextStyle(fontSize:10,color:Colors.white38)),Row(mainAxisAlignment:MainAxisAlignment.center,children:[IconButton(icon:Icon(Icons.replay_10),visualDensity:VisualDensity.compact,onPressed:()=>widget.onSeek(-10)),IconButton(icon:Icon(Icons.folder_open),visualDensity:VisualDensity.compact,onPressed:widget.onPick),IconButton(icon:Icon(Icons.forward_10),visualDensity:VisualDensity.compact,onPressed:()=>widget.onSeek(10))])]);})]);}
 class RL extends CustomPainter{final bool live,has,play;RL({required this.live,required this.has,required this.play});@override void paint(Canvas cv,Size sz){var ct=Offset(sz.width/2,sz.height/2);var rad=sz.width/2;if(!has){cv.drawCircle(ct,rad,Paint()..style=PaintingStyle.stroke..strokeWidth=2..color=Colors.white12);return;}var p=Paint()..style=PaintingStyle.stroke..strokeWidth=5..shader=SweepGradient(colors:[Color(0xFF087BFF),Color(0xFF111111),Color(0xFFFF7A00),Color(0xFF111111),Color(0xFF087BFF)]).createShader(Rect.fromCircle(center:ct,radius:rad));cv.drawCircle(ct,rad-2,p);if(play){var g=Paint()..style=PaintingStyle.stroke..strokeWidth=12..color=(live?Color(0xFFCEBBFF):Colors.orange).withOpacity(0.25)..maskFilter=MaskFilter.blur(BlurStyle.normal,8);cv.drawCircle(ct,rad-2,g);}}@override bool shouldRepaint(covariant RL o)=>o.live!=live||o.has!=has||o.play!=play;}
 class Gr extends CustomPainter{@override void paint(Canvas cv,Size sz){var ct=Offset(sz.width/2,sz.height/2);var r=sz.width/2;var p=Paint()..style=PaintingStyle.stroke..strokeWidth=1..color=Colors.white.withOpacity(0.06);for(double i=20;i<r-5;i+=5)cv.drawCircle(ct,i,p);}@override bool shouldRepaint(covariant CustomPainter o)=>false;}

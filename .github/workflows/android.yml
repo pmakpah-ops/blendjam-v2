@@ -38,7 +38,7 @@ jobs:
             --project-name blendjam \
             .
 
-      - name: Configure Android build and TensorFlow Lite rules
+      - name: Configure Android build
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -46,7 +46,7 @@ jobs:
           gradle = Path("android/app/build.gradle.kts")
           lines = gradle.read_text().splitlines()
 
-          # Remove old NDK assignments and set the required version inside android {}.
+          # Set the NDK explicitly in the generated Android block.
           lines = [line for line in lines if "ndkVersion =" not in line]
           android_index = next((i for i, line in enumerate(lines) if line.strip() == "android {"), None)
           if android_index is None:
@@ -56,32 +56,12 @@ jobs:
               line.replace("minSdk = flutter.minSdkVersion", "minSdk = 24")
               for line in lines
           ]
-
-          # Ensure R8 receives a narrow rule for the missing optional GPU class.
-          release_index = next((i for i, line in enumerate(lines) if line.strip() == "release {"), None)
-          if release_index is None:
-              raise SystemExit("Could not find release buildType in build.gradle.kts")
-          release_end = next(
-              (i for i in range(release_index + 1, len(lines)) if lines[i] == "        }"),
-              None
-          )
-          if release_end is None:
-              raise SystemExit("Could not find end of release buildType")
-          if not any("proguardFiles(" in line for line in lines[release_index:release_end]):
-              lines.insert(
-                  release_end,
-                  '            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")'
-              )
-
           gradle.write_text("\n".join(lines) + "\n")
-          Path("android/app/proguard-rules.pro").write_text(
-              "-dontwarn org.tensorflow.lite.gpu.GpuDelegateFactory$Options\n"
-          )
 
           check = gradle.read_text()
           if 'ndkVersion = "27.0.12077973"' not in check or "minSdk = 24" not in check:
               raise SystemExit("Android SDK settings were not applied")
-          print("Android NDK, minimum SDK, and R8 rules configured.")
+          print("Android NDK 27 and minSdk 24 configured.")
           PY
 
       - name: Get dependencies
