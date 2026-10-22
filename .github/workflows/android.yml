@@ -44,6 +44,7 @@ jobs:
             's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' \
             android/app/build.gradle.kts
           sed -i '/^android {/a\    ndkVersion = "27.0.12077973"' android/app/build.gradle.kts
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/' android/app/build.gradle.kts
 
       - name: Get dependencies
         run: |
