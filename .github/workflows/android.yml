@@ -42,7 +42,7 @@ jobs:
         run: |
           sed -i \
             's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' \
-            android/app/build.gradle
+            android/app/build.gradle.kts
 
       - name: Get dependencies
         run: |
