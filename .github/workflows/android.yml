@@ -38,13 +38,56 @@ jobs:
             --project-name blendjam \
             .
 
-      - name: Set Android compile SDK
+      - name: Configure Android build and TensorFlow Lite rules
         run: |
-          sed -i \
-            's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' \
-            android/app/build.gradle.kts
-          sed -i '/^android {/a\    ndkVersion = "27.0.12077973"' android/app/build.gradle.kts
-          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/' android/app/build.gradle.kts
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          gradle = Path("android/app/build.gradle.kts")
+          content = gradle.read_text()
+
+          # Replace Flutter's default NDK assignment (rather than adding an
+          # earlier assignment that a later default could override).
+          content = content.replace(
+              "ndkVersion = flutter.ndkVersion",
+              'ndkVersion = "27.0.12077973"'
+          )
+          content = content.replace(
+              "minSdk = flutter.minSdkVersion",
+              "minSdk = 24"
+          )
+
+          # Ensure the release shrinker reads the optional TensorFlow Lite GPU
+          # warning rule without changing app code or adding a runtime package.
+          release_match = re.search(r"(release\\s*\\{)", content)
+          if not release_match:
+              raise SystemExit("Could not find release buildType in build.gradle.kts")
+          release_start = release_match.end()
+          release_end = content.find("\\n        }", release_start)
+          if release_end < 0:
+              raise SystemExit("Could not find end of release buildType")
+          release_block = content[release_start:release_end]
+          if "proguardFiles(" not in release_block:
+              content = (
+                  content[:release_start]
+                  + '\\n            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")'
+                  + content[release_start:]
+              )
+
+          gradle.write_text(content)
+          Path("android/app/proguard-rules.pro").write_text(
+              "-dontwarn org.tensorflow.lite.gpu.GpuDelegateFactory$Options\\n"
+          )
+
+          # Fail early if the generated Gradle file did not accept the settings.
+          check = gradle.read_text()
+          if 'ndkVersion = "27.0.12077973"' not in check:
+              raise SystemExit("NDK 27 configuration was not applied")
+          if "minSdk = 24" not in check:
+              raise SystemExit("minSdk 24 configuration was not applied")
+          print("Configured NDK 27, minSdk 24, and TensorFlow Lite R8 rule.")
+          PY
 
       - name: Get dependencies
         run: |
