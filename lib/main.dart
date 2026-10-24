@@ -9,7 +9,7 @@ class S extends State<DJ> {
   static const _fadeLength=Duration(seconds:10);
   final a=AudioPlayer(), b=AudioPlayer();
   String? na,nb,pathA,pathB; Uint8List? aa,ab; double? bpmA,bpmB; bool bpmBusyA=false,bpmBusyB=false; final Map<String,double> _bpmCache={};
-  D l=D.a; bool au=false,xf=false,ar=false;
+  D l=D.a; bool au=false,xf=false,ar=false,bpmMatch=false;
   double xv=0; List<T> q=[]; int qi=0; List<Map<String,dynamic>> crates=[]; List<T> recent=[]; String? lastFolder;
   StreamSubscription<Duration>? _posA,_posB;
   Timer? _fadeTimer;
@@ -259,7 +259,7 @@ class S extends State<DJ> {
       if(value>180)value/=2;
       if(value<40||value>240||!value.isFinite)throw StateError('Could not estimate a reliable BPM.');
       _bpmCache[path]=value;
-      if(!_disposed&&token==_gen(d)&&mounted)setState(()=>SBPM(d,value));
+      if(!_disposed&&token==_gen(d)&&mounted){setState(()=>SBPM(d,value));if(bpmMatch)unawaited(_applyBpmMatch());}
     }catch(e){
       debugPrint('BlendJam BPM analysis error: $e');
       if(!_disposed&&token==_gen(d)&&mounted){
@@ -268,6 +268,46 @@ class S extends State<DJ> {
     }finally{
       try{if(waveFile!=null&&await waveFile.exists())await waveFile.delete();}catch(_){}
       if(!_disposed&&token==_gen(d)&&mounted)setState(()=>SBBusy(d,false));
+    }
+  }
+  Future<void> _toggleBpmMatch() async {
+    if(_disposed)return;
+    final enable=!bpmMatch;
+    setState(()=>bpmMatch=enable);
+    if(!enable){
+      try{await a.setSpeed(1);}catch(_){}
+      try{await b.setSpeed(1);}catch(_){}
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('BPM matching OFF. Playback speeds reset.')));
+      return;
+    }
+    if(N(D.a)==null&&N(D.b)==null){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Load a song first. BPM matching will analyse loaded songs automatically.')));
+      return;
+    }
+    final tasks=<Future<void>>[];
+    if(N(D.a)!=null&&BPM(D.a)==null)tasks.add(_analyseBpm(D.a));
+    if(N(D.b)!=null&&BPM(D.b)==null)tasks.add(_analyseBpm(D.b));
+    if(tasks.isNotEmpty)await Future.wait(tasks);
+    await _applyBpmMatch(showNotice:true);
+  }
+  Future<void> _applyBpmMatch({D? outgoing,bool showNotice=false}) async {
+    if(!bpmMatch||_disposed)return;
+    final source=outgoing??l;
+    final incoming=O(source);
+    final sourceBpm=BPM(source),incomingBpm=BPM(incoming);
+    if(N(source)==null||N(incoming)==null||sourceBpm==null||incomingBpm==null){
+      if(showNotice&&mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Load two songs and let BPM analysis finish before matching.')));
+      return;
+    }
+    final raw=sourceBpm/incomingBpm;
+    final speed=raw.clamp(0.85,1.15).toDouble();
+    try{await P(incoming).setSpeed(speed);}catch(e){debugPrint('BlendJam BPM matching error: $e');return;}
+    if(showNotice&&mounted){
+      final limited=(raw-speed).abs()>0.001;
+      final message=limited
+        ? 'BPM matched as closely as possible; speed adjustment is limited to ±15%.'
+        : 'BPM matched: ${sourceBpm.round()} BPM target.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(message)));
     }
   }
   Future<bool> _ld(D d,T t,{bool pl=false})async{
@@ -282,6 +322,7 @@ class S extends State<DJ> {
       SN(d,t.n);SA(d,null);SPath(d,t.p);SBPM(d,_bpmCache[t.p]);SBBusy(d,false);
       if(pl){l=d;xv=d==D.a?0:1;await ap.setVolume(1);unawaited(ap.play().catchError((Object e){debugPrint('BlendJam deck playback error: $e');}));}
       if(mounted)setState((){});
+      if(bpmMatch){unawaited(_analyseBpm(d).then((_)=>_applyBpmMatch()));}
       _rt(t.p).then((bytes){if(!_disposed&&token==_gen(d)){SA(d,bytes);if(mounted)setState((){});}});
       return true;
     }catch(_){
@@ -330,6 +371,7 @@ class S extends State<DJ> {
     xf=true;
     _fadeTimer?.cancel();
     try{
+      await _applyBpmMatch(outgoing:outgoing);
       await tp.setVolume(0);
       await tp.seek(const Duration(milliseconds:200));
       // just_audio's play() future can remain pending until playback stops or
@@ -357,6 +399,7 @@ class S extends State<DJ> {
       await tp.setVolume(1);
       await sp.setVolume(0);
       await sp.stop();
+      try{await sp.setSpeed(1);}catch(_){}
       SN(outgoing,null);
       SA(outgoing,null);SPath(outgoing,null);SBPM(outgoing,null);SBBusy(outgoing,false);
       l=incoming;
@@ -428,6 +471,7 @@ class S extends State<DJ> {
     // Keep the logical active deck aligned with the louder side of the mix.
     final target=value>=0.5?D.b:D.a;
     if(N(target)!=null)l=target;
+    if(bpmMatch)unawaited(_applyBpmMatch());
     if(mounted)setState((){});
   }
   Future<void> _pk(D d)async{
@@ -495,7 +539,7 @@ class S extends State<DJ> {
   }
 Widget _dk(D d,bool up)=>Deck(deck:d,pl:P(d),name:N(d)??'No track',art:A(d),live:l==d,next:N(d)!=null&&l!=d,bpm:BPM(d),bpmLoading:BPMBusy(d),onBpm:()=>_analyseBpm(d),onPlay:()=>_tg(d),onPick:()=>_pk(d),onSeek:(s)async=>await P(d).seek(P(d).position+Duration(seconds:s)),lift:up);
 @override Widget build(BuildContext c)=>Scaffold(backgroundColor:Colors.black,appBar:AppBar(backgroundColor:Colors.black,title:Text('BlendJam'),
-actions:[Text('AUTO',style:TextStyle(fontSize:11)),Switch(value:au,activeColor:C,onChanged:(v)async{setState(()=>au=v);if(v)await _as();}),PopupMenuButton(icon:Icon(Icons.upload_file),itemBuilder:(_)=>[PopupMenuItem(child:Text('Load A'),onTap:()=>_pk(D.a)),PopupMenuItem(child:Text('Load B'),onTap:()=>_pk(D.b)),PopupMenuItem(child:Text('Add Queue'),onTap:()=>_aq())]),IconButton(icon:Icon(Icons.queue_music),onPressed:_qp)]),
+actions:[Text('AUTO',style:TextStyle(fontSize:11)),Switch(value:au,activeColor:C,onChanged:(v)async{setState(()=>au=v);if(v)await _as();}),IconButton(icon:Icon(Icons.sync_alt,color:bpmMatch?C:Colors.white70),tooltip:bpmMatch?'BPM matching ON':'BPM matching OFF',onPressed:_toggleBpmMatch),PopupMenuButton(icon:Icon(Icons.upload_file),itemBuilder:(_)=>[PopupMenuItem(child:Text('Load A'),onTap:()=>_pk(D.a)),PopupMenuItem(child:Text('Load B'),onTap:()=>_pk(D.b)),PopupMenuItem(child:Text('Add Queue'),onTap:()=>_aq())]),IconButton(icon:Icon(Icons.queue_music),onPressed:_qp)]),
 body:SafeArea(child:Column(children:[Flexible(child:_dk(D.a,false)),Padding(padding:EdgeInsets.symmetric(horizontal:12,vertical:2),child:Column(children:[Row(children:[Text('A',style:TextStyle(fontSize:12)),Expanded(child:Slider(value:xv,min:0,max:1,activeColor:C,onChanged:(v)=>unawaited(_manualCrossfade(v)))),Text('B',style:TextStyle(fontSize:12))]),Text(xf?'MIXING ${(xv*100).toInt()}%':'',style:TextStyle(color:C,fontSize:11))])),Flexible(child:_dk(D.b,true))])));}
 class Deck extends StatefulWidget{final D deck;final AudioPlayer pl;final String name;final Uint8List?art;final bool live,next,lift,bpmLoading;final double? bpm;final VoidCallback onPlay,onPick,onBpm;final Future<void> Function(int)onSeek;const Deck({super.key,required this.deck,required this.pl,required this.name,required this.art,required this.live,required this.next,required this.lift,required this.bpm,required this.bpmLoading,required this.onBpm,required this.onPlay,required this.onPick,required this.onSeek});@override State<Deck>createState()=>DD();}
 class DD extends State<Deck> with TickerProviderStateMixin{late AnimationController an,rg,titleScroll;StreamSubscription<bool>?ps;@override void initState(){super.initState();an=AnimationController(vsync:this,duration:Duration(seconds:3));rg=AnimationController(vsync:this,duration:Duration(seconds:5));titleScroll=AnimationController(vsync:this,duration:Duration(seconds:10));ps=widget.pl.playingStream.listen((p){if(!mounted)return;if(p){an.repeat();rg.repeat();titleScroll.repeat();}else{an.stop();rg.stop();titleScroll.stop();}});if(widget.pl.playing){an.repeat();rg.repeat();titleScroll.repeat();}}@override void didUpdateWidget(covariant Deck oldWidget){super.didUpdateWidget(oldWidget);if(oldWidget.name!=widget.name){titleScroll.value=0;if(widget.pl.playing)titleScroll.repeat();else titleScroll.stop();}} @override void dispose(){ps?.cancel();an.dispose();rg.dispose();titleScroll.dispose();super.dispose();}
