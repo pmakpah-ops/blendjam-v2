@@ -299,14 +299,17 @@ class S extends State<DJ> {
       if(showNotice&&mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Load two songs and let BPM analysis finish before matching.')));
       return;
     }
-    final raw=sourceBpm/incomingBpm;
+    // Match against the live deck's effective BPM, including any speed
+    // adjustment already applied when it entered from the previous handover.
+    final effectiveSourceBpm=sourceBpm*P(source).speed;
+    final raw=effectiveSourceBpm/incomingBpm;
     final speed=raw.clamp(0.85,1.15).toDouble();
     try{await P(incoming).setSpeed(speed);}catch(e){debugPrint('BlendJam BPM matching error: $e');return;}
     if(showNotice&&mounted){
       final limited=(raw-speed).abs()>0.001;
       final message=limited
         ? 'BPM matched as closely as possible; speed adjustment is limited to ±15%.'
-        : 'BPM matched: ${sourceBpm.round()} BPM target.';
+        : 'BPM matched: ${effectiveSourceBpm.round()} BPM target.';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(message)));
     }
   }
