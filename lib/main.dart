@@ -13,7 +13,7 @@ class S extends State<DJ> {
   double xv=0; List<T> q=[]; int qi=0; List<Map<String,dynamic>> crates=[]; List<T> recent=[]; String? lastFolder;
   StreamSubscription<Duration>? _posA,_posB;
   Timer? _fadeTimer;
-  bool _disposed=false,_transitioning=false;
+  bool _disposed=false,_transitioning=false,_matchingBpm=false;
   int _generationA=0,_generationB=0;
   final Set<String> _preparedFor= <String>{};
 
@@ -213,7 +213,7 @@ class S extends State<DJ> {
     final path=PathOf(d);
     if(path==null||N(d)==null||_disposed)return;
     final cached=_bpmCache[path];
-    if(cached!=null){if(mounted)setState(()=>SBPM(d,cached));return;}
+    if(cached!=null){if(mounted)setState(()=>SBPM(d,cached));if(bpmMatch)unawaited(_applyBpmMatch());return;}
     final token=_gen(d);
     if(mounted)setState(()=>SBBusy(d,true));
     File? waveFile;
@@ -291,7 +291,9 @@ class S extends State<DJ> {
     await _applyBpmMatch(showNotice:true);
   }
   Future<void> _applyBpmMatch({D? outgoing,bool showNotice=false}) async {
-    if(!bpmMatch||_disposed)return;
+    if(!bpmMatch||_disposed||_matchingBpm)return;
+    _matchingBpm=true;
+    try {
     final source=outgoing??l;
     final incoming=O(source);
     final sourceBpm=BPM(source),incomingBpm=BPM(incoming);
@@ -304,13 +306,22 @@ class S extends State<DJ> {
     final effectiveSourceBpm=sourceBpm*P(source).speed;
     final raw=effectiveSourceBpm/incomingBpm;
     final speed=raw.clamp(0.85,1.15).toDouble();
-    try{await P(incoming).setSpeed(speed);}catch(e){debugPrint('BlendJam BPM matching error: $e');return;}
+    // Do not alter a deck that is already audible; match the waiting deck
+    // before it starts, rather than changing tempo during playback.
+    if(P(incoming).playing)return;
+    // Avoid redundant platform speed writes when the target is already set.
+    if((P(incoming).speed-speed).abs()>0.005){
+      try{await P(incoming).setSpeed(speed);}catch(e){debugPrint('BlendJam BPM matching error: $e');return;}
+    }
     if(showNotice&&mounted){
       final limited=(raw-speed).abs()>0.001;
       final message=limited
         ? 'BPM matched as closely as possible; speed adjustment is limited to ±15%.'
         : 'BPM matched: ${effectiveSourceBpm.round()} BPM target.';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(message)));
+    }
+    } finally {
+      _matchingBpm=false;
     }
   }
   Future<bool> _ld(D d,T t,{bool pl=false})async{
@@ -325,7 +336,7 @@ class S extends State<DJ> {
       SN(d,t.n);SA(d,null);SPath(d,t.p);SBPM(d,_bpmCache[t.p]);SBBusy(d,false);
       if(pl){l=d;xv=d==D.a?0:1;await ap.setVolume(1);unawaited(ap.play().catchError((Object e){debugPrint('BlendJam deck playback error: $e');}));}
       if(mounted)setState((){});
-      if(bpmMatch){unawaited(_analyseBpm(d).then((_)=>_applyBpmMatch()));}
+      if(bpmMatch){unawaited(_analyseBpm(d));}
       _rt(t.p).then((bytes){if(!_disposed&&token==_gen(d)){SA(d,bytes);if(mounted)setState((){});}});
       return true;
     }catch(_){
@@ -474,7 +485,6 @@ class S extends State<DJ> {
     // Keep the logical active deck aligned with the louder side of the mix.
     final target=value>=0.5?D.b:D.a;
     if(N(target)!=null)l=target;
-    if(bpmMatch)unawaited(_applyBpmMatch());
     if(mounted)setState((){});
   }
   Future<void> _pk(D d)async{
